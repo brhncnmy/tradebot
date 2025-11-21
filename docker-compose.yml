@@ -1,0 +1,48 @@
+version: "3.9"
+
+services:
+  tv-listener:
+    build:
+      context: .
+      dockerfile: docker/tv-listener.Dockerfile
+    image: "${TB_DOCKER_NAMESPACE:-tradebot-local}/tv-listener:${TRADEBOT_TAG:-dev}"
+    container_name: tv-listener
+    ports:
+      - "8000:8000"
+    environment:
+      - SIGNAL_ORCHESTRATOR_URL=http://signal-orchestrator:8001
+    depends_on:
+      - signal-orchestrator
+    networks:
+      - tradebot-net
+
+  signal-orchestrator:
+    build:
+      context: .
+      dockerfile: docker/signal-orchestrator.Dockerfile
+    image: "${TB_DOCKER_NAMESPACE:-tradebot-local}/signal-orchestrator:${TRADEBOT_TAG:-dev}"
+    container_name: signal-orchestrator
+    ports:
+      - "8001:8001"
+    environment:
+      - ORDER_GATEWAY_URL=http://order-gateway:8002
+    depends_on:
+      - order-gateway
+    networks:
+      - tradebot-net
+
+  order-gateway:
+    build:
+      context: .
+      dockerfile: docker/order-gateway.Dockerfile
+    image: "${TB_DOCKER_NAMESPACE:-tradebot-local}/order-gateway:${TRADEBOT_TAG:-dev}"
+    container_name: order-gateway
+    ports:
+      - "8002:8002"
+    networks:
+      - tradebot-net
+
+networks:
+  tradebot-net:
+    driver: bridge
+

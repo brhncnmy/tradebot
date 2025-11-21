@@ -1,0 +1,15 @@
+---
+alwaysApply: false
+---
+Type: Apply Intelligently
+
+Description: Keep work constrained to Phase 1 unless stated otherwise
+
+Content:
+
+“By default, all suggestions and plans should stay within Phase 1 scope:
+
+TradingView → tv-listener → signal-orchestrator → order-gateway → BingX.
+
+When considering Telegram, PocketOption, models, or backtesting, treat them as future work unless the user explicitly asks to design or implement those parts.
+If an idea is ‘nice to have’ but not necessary for Phase 1, clearly mark it as future work and avoid implementing it now.”

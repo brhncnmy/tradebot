@@ -1,0 +1,51 @@
+---
+alwaysApply: false
+---
+Title: Git, branching, Docker, deployment & automation
+Type: Apply Intelligently
+Description: Git workflow, Docker builds, and deployment conventions for TradeBot
+
+Content:
+
+“Use a single main branch (main) that is always deployable.
+Create short-lived feature branches for any meaningful change (for example feature/order-gateway-v1, feature/tv-listener-webhook-validation, fix/signal-normalization-bug).
+Write clear English commit messages and keep commits small and focused.
+
+Always think from the repository root:
+
+Run tests from the repo root (for example with pytest or the configured test runner).
+
+Build all relevant Docker images using docker compose build (or equivalent) from the repo root.
+
+Run services locally using docker compose up (or equivalent) to validate changes end-to-end.
+
+Each non-trivial change should come with:
+
+A short summary of what changed (services, files, interfaces).
+
+Example commands to:
+
+run the tests,
+
+build Docker images,
+
+run or restart the affected services locally.
+
+For deployment to a remote server:
+
+Assume TradeBot is deployed using Docker and docker-compose.yml on at least one VM.
+
+Provide a clear sequence of steps to:
+
+pull or fetch the latest code,
+
+build or pull the updated images,
+
+restart the affected services,
+
+verify that the Phase 1 pipeline (TradingView → tv-listener → signal-orchestrator → order-gateway → BingX) still works.
+
+Also describe how to roll back to the previous version if something goes wrong (for example by using previous images or reverting the Git branch).
+
+Do not leave deployment as a vague ‘then deploy it’ step.
+Prefer explicit, repeatable commands and avoid one-off manual actions that are hard to reproduce.”

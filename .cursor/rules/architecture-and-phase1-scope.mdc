@@ -1,0 +1,27 @@
+---
+alwaysApply: true
+---
+Type: Always Apply
+
+Description: TradeBot architecture and Phase 1 scope
+
+Content:
+
+“This project is TradeBot, an automated trading system built as a Python monorepo with small microservices communicating via HTTP/JSON and orchestrated with Docker Compose from the repo root.
+
+The main services are:
+
+tv-listener: receives TradingView webhooks.
+
+signal-orchestrator: normalizes signals, applies config & risk rules, performs account routing, and routes orders.
+
+order-gateway: unified order API that talks to exchanges (BingX first).
+
+A config layer (config service or shared module) for risk, account, and routing settings.
+
+TradeBot supports multiple trading accounts, including multiple accounts on the same exchange (for example two separate BingX accounts) and accounts across different exchanges. The config layer defines these accounts and how signals are routed to them.
+
+Future services (Telegram sources, PocketOption UI bot, models, backtesting, trailing, etc.) must be considered in the design but must not complicate Phase 1 implementation.
+
+Phase 1 scope is strictly: TradingView → tv-listener → signal-orchestrator → order-gateway → BingX (potentially multiple BingX accounts).
+Ignore other sources and features whenever they would introduce unnecessary complexity for this pipeline.”

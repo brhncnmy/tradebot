@@ -1,0 +1,27 @@
+---
+alwaysApply: false
+---
+Type: Apply Intelligently
+
+Description: Configuration for multiple trading accounts and routing
+
+Content:
+
+“Configuration must treat trading accounts as first-class objects.
+
+A trading account is defined by:
+
+exchange (e.g. bingx, binance), and
+
+an account identifier/profile (e.g. bingx_main, bingx_copy_1, binance_scalp).
+
+The config layer must provide:
+
+A list of available trading accounts and their credentials (via environment variables or secure config).
+
+Per-account settings such as default leverage, margin mode, risk limits, and DRY-RUN vs LIVE.
+
+Routing profiles that map signal sources/strategies/symbols to one or more target accounts.
+
+signal-orchestrator uses this configuration to decide, for each incoming normalized signal, which account(s) to trade on and with which parameters.
+order-gateway must always receive an explicit account identifier/profile so it can use the correct credentials and exchange settings.”

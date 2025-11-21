@@ -1,0 +1,64 @@
+from unittest.mock import AsyncMock, patch
+
+from fastapi.testclient import TestClient
+
+from services.tv_listener.src.main import app
+
+client = TestClient(app)
+
+
+@patch("services.tv_listener.src.main.httpx.AsyncClient")
+def test_valid_payload_forwarded(mock_client_class):
+    """Test that a valid TradingView payload is forwarded to signal-orchestrator."""
+    payload = {
+        "symbol": "BTC-USDT",
+        "side": "buy",
+        "entry_type": "market",
+        "quantity": 0.001,
+        "stop_loss": 28000.0,
+        "take_profits": [
+            {"price": 31000.0, "size_pct": 50},
+            {"price": 32000.0, "size_pct": 50},
+        ],
+        "routing_profile": "default",
+        "leverage": 10,
+        "strategy_name": "tv_test_strategy",
+    }
+    
+    # Mock httpx.AsyncClient.post
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"ok": True}
+    
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+    
+    response = client.post("/webhook/tradingview", json=payload)
+    
+    assert response.status_code == 200
+    assert response.json()["status"] == "forwarded"
+    assert response.json()["upstream_status"] == 200
+    
+    # Verify the mock was called
+    mock_client.post.assert_called_once()
+    call_args = mock_client.post.call_args
+    assert call_args[0][0].endswith("/signals")
+
+
+def test_invalid_side_results_in_400():
+    """Test that an invalid side value results in 400 error."""
+    payload = {
+        "symbol": "BTC-USDT",
+        "side": "nonsense",
+        "entry_type": "market",
+        "quantity": 0.001,
+    }
+    
+    response = client.post("/webhook/tradingview", json=payload)
+    
+    assert response.status_code == 400
+    assert "Invalid side" in response.json()["detail"]
+

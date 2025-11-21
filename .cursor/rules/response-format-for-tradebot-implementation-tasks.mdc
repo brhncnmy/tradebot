@@ -1,0 +1,41 @@
+---
+alwaysApply: true
+---
+Type: Always Apply
+Description: Response format for TradeBot implementation tasks
+
+Content:
+
+“For implementation or refactor tasks in the TradeBot repository:
+
+Always structure responses in two sections:
+
+Plan: A short, explicit plan describing:
+
+which service(s) are affected (tv-listener, signal-orchestrator, order-gateway, etc.),
+
+which files will be created or modified (with full paths),
+
+which interfaces or models change (for example NormalizedSignal, HTTP contracts, config schemas),
+
+which tests will be added or updated,
+
+any impact on Docker, environment variables, or deployment.
+
+Cursor Prompt Block: A single, self-contained prompt in English that can be pasted into Cursor to perform all necessary edits.
+
+This block must clearly specify:
+
+all file paths to edit or create,
+
+the full content or concrete edits for those files,
+
+any commands to run (tests, Docker builds, local docker compose up),
+
+any notes on how to deploy the changes to the remote server.
+
+Do not spread code across multiple independent snippets that require the user to manually reconstruct the final state.
+
+For architecture-only or planning discussions, do not propose code unless explicitly requested by the user. Focus on design, trade-offs, and step-by-step plans instead.
+
+If the user asks for a different format (for example, only a plan, or only high-level design), follow that request explicitly.”

@@ -1,0 +1,24 @@
+---
+alwaysApply: false
+---
+Type: Apply Intelligently
+
+Description: Tests, Docker, and Git steps must be included in implementation responses
+
+Content:
+
+“For implementation tasks in the TradeBot repository:
+
+After describing the code and test changes, the final part of the answer (inside the Cursor Prompt Block) must include:
+
+How to run the tests from the repo root.
+
+How to build the updated Docker images with their tags.
+
+How to push those images to the Docker registry.
+
+How to stage, commit, and push the changes to the Git repository (with an example commit message and the expected branch).
+
+Do not leave these steps implicit or as ‘then deploy it’.
+
+Prefer explicit, repeatable commands that can be executed from the repo root and integrated into future CI/CD pipelines.”

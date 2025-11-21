@@ -1,0 +1,27 @@
+---
+alwaysApply: true
+---
+Type: Always Apply
+
+Description: Repo layout and shared code conventions
+
+Content:
+
+“The repository uses a monorepo layout:
+
+services/<service-name>/src for service code.
+
+services/<service-name>/tests for tests.
+
+common/models for shared data models such as NormalizedSignal.
+
+common/utils for shared utilities such as logging, HTTP client, and config helpers.
+
+docker/ for per-service Dockerfiles.
+
+docker-compose.yml in the repo root.
+
+docs/ for architecture, API contracts, and runbooks.
+
+When adding new code, prefer placing shared logic in common instead of duplicating it across services.
+Keep each service small and focused on a single responsibility.”

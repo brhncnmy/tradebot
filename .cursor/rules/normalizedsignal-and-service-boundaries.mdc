@@ -1,0 +1,52 @@
+---
+alwaysApply: true
+---
+Type: Always Apply
+
+Description: Service boundaries, normalized signal, and account-aware order execution
+
+Content:
+
+“All signal sources must convert their raw payloads into a shared NormalizedSignal model located in common/models.
+
+The normalized signal may contain routing hints (such as source, strategy_name, or a routing_profile), but it does not choose specific trading accounts directly. The final mapping from a signal to one or more trading accounts is handled by signal-orchestrator and the config layer.
+
+Responsibilities:
+
+tv-listener:
+
+Validate TradingView webhook payloads.
+
+Map them into NormalizedSignal.
+
+Forward normalized signals to signal-orchestrator via HTTP.
+
+No exchange, risk, or account-routing logic here.
+
+signal-orchestrator:
+
+Receive NormalizedSignal objects.
+
+Fetch config and risk settings (per source, per strategy, per symbol, per account profile).
+
+Apply DRY-RUN mode and guardrails (when implemented).
+
+Perform account routing:
+
+Decide which trading account(s) should receive the order based on config and routing profiles.
+
+A single normalized signal can result in multiple outgoing orders if it targets multiple accounts.
+
+For each target trading account, build a clean request for order-gateway that includes the account identifier/profile and the order parameters.
+
+Do not implement exchange-specific REST/WebSocket details.
+
+order-gateway:
+
+Expose a unified HTTP API (open/close positions, partial close, move SL to BE, etc.).
+
+Every API call must include the target trading account (exchange + account identifier/profile).
+
+Translate unified operations into exchange-specific API calls using the correct credentials and settings for that account, handling errors, rate limits, and retries.
+
+Must not contain signal parsing logic or high-level strategy or routing decisions.”
