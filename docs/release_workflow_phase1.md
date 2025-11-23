@@ -23,6 +23,15 @@ Image tags are derived as:
 
 At runtime, the effective tag is controlled by the `TRADEBOT_TAG` environment variable. If `TRADEBOT_TAG` is not set, it defaults to `v<VERSION>`.
 
+### Environment file (.env)
+
+The project uses a `.env` file in the repo root to provide non-secret deployment settings:
+
+- `TB_DOCKER_NAMESPACE` – Docker registry namespace (for example `burhancanmaya`).
+- `TRADEBOT_TAG` – Image tag to use in `docker-compose.yml` (for example `v0.1.0`).
+
+The `scripts/build_and_push_docker.sh` release script automatically updates `.env` with the namespace and tag used for the release. The `.env` file is committed to git so that servers can simply `git pull` and use `docker compose` without manual `export` commands.
+
 ## 2. Docker Image Naming
 
 Phase 1 uses one image per service:
@@ -104,28 +113,22 @@ This will:
 
 On the target server:
 
-**Ensure the repository (or at least docker-compose.yml) is present.**
-
-**Set the same namespace and tag used during the build:**
+**1. Pull the latest code (which includes the updated `.env`):**
 
 ```bash
-export TB_DOCKER_NAMESPACE="your-dockerhub-username-or-org"
-export TRADEBOT_TAG="v0.1.0"
+git pull origin main
 ```
 
-**Pull the images:**
+**2. Pull and restart the Phase 1 services:**
 
 ```bash
 docker compose pull tv-listener signal-orchestrator order-gateway
-```
-
-**Start or restart the Phase 1 services:**
-
-```bash
 docker compose up -d tv-listener signal-orchestrator order-gateway
 ```
 
-The docker-compose file uses the `image: "${TB_DOCKER_NAMESPACE:-tradebot-local}/<service>:${TRADEBOT_TAG:-dev}"` pattern, so these environment variables determine which images are pulled and run.
+Docker Compose will automatically read `TB_DOCKER_NAMESPACE` and `TRADEBOT_TAG` from the `.env` file in the repo root. These values are updated during the release process and committed to git.
+
+**Note:** If you need to override the values on a specific server, you can still `export` environment variables before running `docker compose`, but the default flow is `.env`-driven.
 
 ## 5. Git Commit & Push
 

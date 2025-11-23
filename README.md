@@ -45,35 +45,48 @@ For detailed documentation, see `docs/phase1_tradingview_pipeline.md`.
 
 ### Release & Deployment (Phase 1)
 
-For building and pushing versioned Docker images and deploying them on a server with Docker Compose, see:
+The Phase 1 release workflow is:
 
-- `docs/release_workflow_phase1.md`
+1. **Run tests inside Docker:**
 
-In short:
+   ```bash
+   chmod +x scripts/test_phase1_in_docker.sh
+   ./scripts/test_phase1_in_docker.sh
+   ```
 
-- Maintain the `VERSION` file at the repo root (e.g. `0.1.0`).
-- Before building images, run the Phase 1 tests inside Docker:
+2. **Build and push images from your release machine (local or CI):**
 
-  ```bash
-  chmod +x scripts/test_phase1_in_docker.sh
-  ./scripts/test_phase1_in_docker.sh
-  ```
+   ```bash
+   export TB_DOCKER_NAMESPACE="burhancanmaya"        # set once per environment
+   export TRADEBOT_TAG="v0.1.0"                     # usually v<VERSION>
 
-- Set `TB_DOCKER_NAMESPACE` to your Docker registry namespace (for example your Docker Hub username).
-- Optionally set `TRADEBOT_TAG` to a specific tag (defaults to `v<VERSION>`).
-- Then build and push the images:
+   chmod +x scripts/build_and_push_docker.sh
+   ./scripts/build_and_push_docker.sh
+   ```
 
-  ```bash
-  chmod +x scripts/build_and_push_docker.sh
-  ./scripts/build_and_push_docker.sh
-  ```
+   The build script updates the `.env` file in the repo root with:
+   - `TB_DOCKER_NAMESPACE`
+   - `TRADEBOT_TAG`
 
-On the server, set the same `TB_DOCKER_NAMESPACE` and `TRADEBOT_TAG`, then:
+   Commit this file together with the code changes.
 
-```bash
-docker compose pull tv-listener signal-orchestrator order-gateway
-docker compose up -d tv-listener signal-orchestrator order-gateway
-```
+3. **Commit and push to GitHub:**
 
-This ensures that the Phase 1 TradingView → tv-listener → signal-orchestrator → order-gateway → BingX pipeline runs with explicit, versioned Docker images.
+   ```bash
+   git add .
+   git commit -m "Release v0.1.0 (Phase 1)"
+   git push origin main
+   ```
+
+4. **On the server:**
+
+   ```bash
+   git pull origin main
+   docker compose pull tv-listener signal-orchestrator order-gateway
+   docker compose up -d tv-listener signal-orchestrator order-gateway
+   ```
+
+   Docker Compose reads `TB_DOCKER_NAMESPACE` and `TRADEBOT_TAG` from `.env`, so you do not need to export them manually on the server.
+
+For detailed documentation, see `docs/release_workflow_phase1.md`.
 
