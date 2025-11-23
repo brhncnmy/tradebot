@@ -55,6 +55,27 @@ def get_bingx_env(mode: str) -> BingxEnvironment:
     raise ValueError(f"Unsupported BingX mode for HTTP: {mode}")
 
 
+def _map_position_side(side: str) -> str:
+    """
+    Map normalized side to BingX positionSide.
+    
+    Args:
+        side: Normalized side ("long", "short", "buy", "sell")
+        
+    Returns:
+        BingX positionSide ("LONG" or "SHORT")
+        
+    Raises:
+        ValueError: If side is not supported
+    """
+    s = side.lower()
+    if s in ("buy", "long"):
+        return "LONG"
+    if s in ("sell", "short"):
+        return "SHORT"
+    raise ValueError(f"Unsupported side for positionSide: {side}")
+
+
 def build_signed_query(params: Dict[str, Any], secret: str) -> str:
     """
     Build and sign query string for BingX API.
@@ -127,6 +148,9 @@ async def bingx_place_order(
     side = "BUY" if order.side == "long" else "SELL"
     order_type = "MARKET" if order.entry_type == "market" else "LIMIT"
     
+    # Map positionSide for Hedge mode
+    position_side = _map_position_side(order.side)
+    
     quantity = order.quantity
     if quantity is None:
         raise ValueError("BingX order requires quantity; got None")
@@ -137,7 +161,7 @@ async def bingx_place_order(
         "side": side,
         "type": order_type,
         "quantity": quantity,
-        "positionSide": "BOTH",
+        "positionSide": position_side,
     }
     
     # Add price for limit orders
@@ -163,11 +187,12 @@ async def bingx_place_order(
     
     # Log request (without secrets)
     logger.info(
-        "BingX request: mode=%s, account=%s, symbol=%s, side=%s, quantity=%s, endpoint=%s",
+        "BingX request: mode=%s, account=%s, symbol=%s, side=%s, positionSide=%s, quantity=%s, endpoint=%s",
         account_config.mode,
         account_config.account_id,
         symbol,
         side,
+        position_side,
         quantity,
         env.order_path,
     )
