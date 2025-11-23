@@ -60,92 +60,46 @@ TB_DOCKER_NAMESPACE=bcanmaya
 - `bcanmaya/signal-orchestrator:v0.1.0`
 - `bcanmaya/order-gateway:v0.1.0`
 
-## 3. Build & Push Images (local machine)
+## 3. Local Release (Phase 1)
 
-From the repo root:
+On your release machine (local or CI):
 
-**Make sure tests pass (inside Docker):**
-
-```bash
-./scripts/test_phase1_in_docker.sh
-```
-
-This script builds the Phase 1 service images and runs `pytest` inside the `tv-listener` container, which uses a Python 3.10+ runtime and the same dependencies as the services. This avoids issues with differing host Python versions.
-
-**Set the Docker registry namespace:**
+**1. Choose a new version (for example `0.1.1`) and run:**
 
 ```bash
-export TB_DOCKER_NAMESPACE="your-dockerhub-username-or-org"
+scripts/release_phase1.sh 0.1.1
 ```
 
-**Optionally override the image tag (defaults to v<VERSION>):**
+This script will:
+
+- Set `VERSION` to `0.1.1`,
+- Run tests inside Docker,
+- Build and push images for `linux/amd64` using `TB_DOCKER_NAMESPACE` and `TRADEBOT_TAG`,
+- Update the `.env` file with `TB_DOCKER_NAMESPACE` and `TRADEBOT_TAG`,
+- Commit and push all changes to GitHub.
+
+**Note:** `scripts/build_and_push_docker.sh` uses `docker buildx build --platform linux/amd64` to ensure images are compatible with the Linux/amd64 server environment.
+
+## 4. Server Deployment (Phase 1)
+
+On the target server (where Docker Compose runs TradeBot):
 
 ```bash
-export TRADEBOT_TAG="v0.1.0"
+scripts/deploy_phase1.sh
 ```
 
-**Ensure the build script is executable:**
+This script:
 
-```bash
-chmod +x scripts/build_and_push_docker.sh
-```
-
-**Build and push images:**
-
-```bash
-./scripts/build_and_push_docker.sh
-```
-
-This will:
-
-- Read `VERSION`.
-- Compute a base tag (`v<VERSION>`) and a short git SHA.
-- Build images for:
-  - `tv-listener`
-  - `signal-orchestrator`
-  - `order-gateway`
-- Tag each image with:
-  - `${TB_DOCKER_NAMESPACE}/<service>:${TRADEBOT_TAG}`
-  - `${TB_DOCKER_NAMESPACE}/<service>:${TRADEBOT_TAG}-<gitsha}`
-- Push both tags to the registry.
-
-## 4. Server Deployment (Docker Compose)
-
-On the target server:
-
-**1. Pull the latest code (which includes the updated `.env`):**
-
-```bash
-git pull origin main
-```
-
-**2. Pull and restart the Phase 1 services:**
-
-```bash
-docker compose pull tv-listener signal-orchestrator order-gateway
-docker compose up -d tv-listener signal-orchestrator order-gateway
-```
-
-Docker Compose will automatically read `TB_DOCKER_NAMESPACE` and `TRADEBOT_TAG` from the `.env` file in the repo root. These values are updated during the release process and committed to git.
-
-**Note:** If you need to override the values on a specific server, you can still `export` environment variables before running `docker compose`, but the default flow is `.env`-driven.
+- Pulls the latest code from `main`,
+- Uses the committed `.env` file to determine `TB_DOCKER_NAMESPACE` and `TRADEBOT_TAG`,
+- Pulls the corresponding images,
+- Restarts the Phase 1 services with `docker compose up -d`.
 
 ## 5. Git Commit & Push
 
-It is recommended to commit code changes before or together with a release.
+The `scripts/release_phase1.sh` script automatically handles git commit and push as part of the release process. You do not need to manually commit or push changes when using the release script.
 
-**Typical workflow from the repo root:**
-
-```bash
-git status
-git add .
-git commit -m "Phase 1: TradingView DRY_RUN pipeline release v0.1.0"
-git push origin main
-```
-
-You can bump the `VERSION` file (for example from `0.1.0` to `0.1.1`) as part of the changes when preparing a new release.
-
-**Always ensure that:**
+If you need to make changes outside of the release script, ensure that:
 
 - Tests pass (run `./scripts/test_phase1_in_docker.sh`).
 - Images are built and pushed with the new tag.

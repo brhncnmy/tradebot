@@ -5,6 +5,13 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# Ensure a buildx builder is available
+if ! docker buildx ls | grep -q 'tradebot-builder'; then
+  docker buildx create --name tradebot-builder --use >/dev/null 2>&1 || docker buildx use default >/dev/null 2>&1 || true
+else
+  docker buildx use tradebot-builder >/dev/null 2>&1 || true
+fi
+
 if [[ ! -f VERSION ]]; then
   echo "VERSION file not found in repo root" >&2
   exit 1
@@ -56,29 +63,25 @@ update_env_file() {
   echo "Updated ${env_file} with namespace=${TB_DOCKER_NAMESPACE} and tag=${TAG}"
 }
 
-build_and_push() {
-  local service_name="$1"
-  local dockerfile="$2"
+# Build and push images for linux/amd64 using buildx
+SERVICES=("tv-listener" "signal-orchestrator" "order-gateway")
 
-  local image="${TB_DOCKER_NAMESPACE}/${service_name}"
+for SERVICE in "${SERVICES[@]}"; do
+  DOCKERFILE="docker/${SERVICE}.Dockerfile"
+  IMAGE_BASE="${TB_DOCKER_NAMESPACE}/${SERVICE}"
+  IMAGE_TAG_MAIN="${IMAGE_BASE}:${TAG}"
+  IMAGE_TAG_SHA="${IMAGE_BASE}:${TAG}-${GIT_SHA}"
 
-  echo "Building image: ${image}:${TAG}"
-  docker build \
-    -f "${dockerfile}" \
-    -t "${image}:${TAG}" \
-    -t "${image}:${TAG}-${GIT_SHA}" \
-    "$ROOT_DIR"
+  echo "[build_and_push] Building and pushing ${IMAGE_TAG_MAIN} and ${IMAGE_TAG_SHA} for linux/amd64..."
 
-  echo "Pushing image: ${image}:${TAG}"
-  docker push "${image}:${TAG}"
-
-  echo "Pushing image: ${image}:${TAG}-${GIT_SHA}"
-  docker push "${image}:${TAG}-${GIT_SHA}"
-}
-
-build_and_push "tv-listener" "docker/tv-listener.Dockerfile"
-build_and_push "signal-orchestrator" "docker/signal-orchestrator.Dockerfile"
-build_and_push "order-gateway" "docker/order-gateway.Dockerfile"
+  docker buildx build \
+    --platform linux/amd64 \
+    -f "${DOCKERFILE}" \
+    -t "${IMAGE_TAG_MAIN}" \
+    -t "${IMAGE_TAG_SHA}" \
+    --push \
+    "${ROOT_DIR}"
+done
 
 # Only update .env after all images are successfully built and pushed
 # This ensures .env always matches the actual deployed image tags

@@ -1,0 +1,16 @@
+---
+alwaysApply: false
+---
+Type: Apply Intelligently
+
+Description: Release and deploy scripts as single source of truth for all phases
+
+Content:
+
+“For TradeBot, release and deployment logic must live in dedicated scripts under scripts/ (for example scripts/release_phase1.sh, scripts/deploy_phase1.sh, and similar scripts for future phases and services).
+
+When changing how tests, Docker builds/pushes, or deployments work for any service or phase, prefer updating these scripts instead of inventing new ad-hoc command sequences.
+
+New phases (for example Telegram-based sources, PocketOption bot, model-based signals, backtesting) should also introduce or extend scripts under scripts/ rather than scattering shell commands across documentation or answers.
+
+Implementation responses should treat these scripts as the primary entry points for local releases and server deployments, and extend them when needed instead of duplicating logic in multiple places.”

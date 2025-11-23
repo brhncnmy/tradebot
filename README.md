@@ -43,50 +43,35 @@ By default, the `bingx_primary` account is configured as `DRY_RUN`. To enable LI
 
 For detailed documentation, see `docs/phase1_tradingview_pipeline.md`.
 
-### Release & Deployment (Phase 1)
+### Phase 1 – Release & Deployment
 
-The Phase 1 release workflow is:
+**Local release (from your dev or CI environment)**
 
-1. **Run tests inside Docker:**
-
-   ```bash
-   chmod +x scripts/test_phase1_in_docker.sh
-   ./scripts/test_phase1_in_docker.sh
-   ```
-
-2. **Build and push images from your release machine (local or CI):**
+1. Pick a new version (for example `0.1.1`).
+2. Run:
 
    ```bash
-   export TB_DOCKER_NAMESPACE="burhancanmaya"        # set once per environment
-   export TRADEBOT_TAG="v0.1.0"                     # usually v<VERSION>
-
-   chmod +x scripts/build_and_push_docker.sh
-   ./scripts/build_and_push_docker.sh
+   scripts/release_phase1.sh 0.1.1
    ```
 
-   The build script updates the `.env` file in the repo root with:
-   - `TB_DOCKER_NAMESPACE`
-   - `TRADEBOT_TAG`
+   This will:
 
-   Commit this file together with the code changes.
+   - Update the `VERSION` file,
+   - Run tests inside Docker,
+   - Build and push images for `linux/amd64`,
+   - Update `.env` with `TB_DOCKER_NAMESPACE` and `TRADEBOT_TAG`,
+   - Commit and push changes to GitHub.
 
-3. **Commit and push to GitHub:**
+**Server deployment**
 
-   ```bash
-   git add .
-   git commit -m "Release v0.1.0 (Phase 1)"
-   git push origin main
-   ```
+On the server where TradeBot runs:
 
-4. **On the server:**
+```bash
+cd /path/to/tradebot
+scripts/deploy_phase1.sh
+```
 
-   ```bash
-   git pull origin main
-   docker compose pull tv-listener signal-orchestrator order-gateway
-   docker compose up -d tv-listener signal-orchestrator order-gateway
-   ```
-
-   Docker Compose reads `TB_DOCKER_NAMESPACE` and `TRADEBOT_TAG` from `.env`, so you do not need to export them manually on the server.
+This script pulls the latest code, pulls the correct images based on `.env`, and restarts the Phase 1 services with `docker compose up -d`.
 
 For detailed documentation, see `docs/release_workflow_phase1.md`.
 
