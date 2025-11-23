@@ -11,10 +11,10 @@ echo "[deploy_phase1] Pulling latest code from main..."
 git pull origin main
 
 echo "[deploy_phase1] Pulling Phase 1 service images..."
-docker compose pull tv-listener signal-orchestrator order-gateway
+docker compose pull tv-listener signal-orchestrator order-gateway nginx-proxy
 
 echo "[deploy_phase1] Restarting Phase 1 services..."
-docker compose up -d tv-listener signal-orchestrator order-gateway
+docker compose up -d tv-listener signal-orchestrator order-gateway nginx-proxy
 
 echo "[deploy_phase1] Done. Current containers:"
 docker compose ps

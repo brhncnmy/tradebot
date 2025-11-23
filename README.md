@@ -4,8 +4,9 @@ Automated trading system built as a Python monorepo with microservices communica
 
 ## Phase 1 – TradingView DRY_RUN Pipeline
 
-In Phase 1, TradeBot supports a simple end-to-end pipeline from TradingView to BingX via three core services:
+In Phase 1, TradeBot supports a simple end-to-end pipeline from TradingView to BingX via four core services:
 
+- **nginx-proxy**: Reverse proxy exposed on port 80. Forwards `/webhook/tradingview` and `/health` to tv-listener.
 - **tv-listener**: Receives TradingView webhooks and normalizes them into `NormalizedSignal` objects.
 - **signal-orchestrator**: Applies routing profiles (e.g. `default`) and builds `OpenOrderRequest` objects per account (e.g. `bingx_primary`).
 - **order-gateway**: Executes orders per account. In `DRY_RUN` mode it generates fake order IDs such as `dryrun-...` without touching the exchange.
@@ -15,16 +16,18 @@ In Phase 1, TradeBot supports a simple end-to-end pipeline from TradingView to B
 1. Start the services:
 
    ```bash
-   docker compose build tv-listener signal-orchestrator order-gateway
-   docker compose up -d tv-listener signal-orchestrator order-gateway
+   docker compose build nginx-proxy tv-listener signal-orchestrator order-gateway
+   docker compose up -d nginx-proxy tv-listener signal-orchestrator order-gateway
    ```
 
    (Optional: Run tests first with `./scripts/test_phase1_in_docker.sh`)
 
-2. Expose tv-listener externally (e.g. via reverse proxy) so that you can call:
+2. The nginx-proxy service is exposed on port 80. TradingView webhook URL:
    ```
-   https://<your-domain>/tv-listener/webhook/tradingview
+   http://<server-ip>/webhook/tradingview
    ```
+   
+   This uses HTTP on port 80 (no explicit port in the URL). The nginx-proxy forwards requests to tv-listener internally.
 
 3. In TradingView, configure an alert with:
    - Webhook URL: your externally reachable URL.

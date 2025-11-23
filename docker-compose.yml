@@ -1,6 +1,19 @@
 version: "3.9"
 
 services:
+  nginx-proxy:
+    build:
+      context: .
+      dockerfile: docker/nginx-proxy.Dockerfile
+    image: "${TB_DOCKER_NAMESPACE:-tradebot-local}/nginx-proxy:${TRADEBOT_TAG:-dev}"
+    container_name: nginx-proxy
+    depends_on:
+      - tv-listener
+    ports:
+      - "80:80"
+    networks:
+      - tradebot-net
+
   tv-listener:
     build:
       context: .

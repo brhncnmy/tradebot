@@ -12,6 +12,8 @@ In Phase 1, order-gateway runs primarily in `DRY_RUN` mode for safety. This mean
 
 ## Services Involved
 
+- **nginx-proxy**: Reverse proxy exposed on port 80. Forwards `/webhook/tradingview` and `/health` to tv-listener.
+
 - **tv-listener**: Receives TradingView webhooks, validates the payload, and normalizes it into a `NormalizedSignal` object that is forwarded to signal-orchestrator.
 
 - **signal-orchestrator**: Applies routing profiles (e.g., `default`) and builds `OpenOrderRequest` objects for each target account. By default, signals are routed to the `bingx_primary` account.
@@ -20,13 +22,15 @@ In Phase 1, order-gateway runs primarily in `DRY_RUN` mode for safety. This mean
 
 ## TradingView Webhook URL
 
-The tv-listener service exposes a `POST /webhook/tradingview` endpoint internally. When exposed externally via a reverse proxy, the URL typically follows this pattern:
+The nginx-proxy service listens on port 80 and forwards requests to tv-listener. The TradingView webhook URL is:
 
 ```
-https://<your-domain>/tv-listener/webhook/tradingview
+http://<server-ip>/webhook/tradingview
 ```
 
-The exact path may depend on your reverse proxy configuration, but the internal FastAPI route is always `/webhook/tradingview`.
+This uses HTTP on port 80 (no explicit port in the URL). The nginx-proxy forwards `/webhook/tradingview` to the internal tv-listener service.
+
+**Note**: For local testing or debugging, you can still access tv-listener directly on port 8000 (e.g., `http://localhost:8000/webhook/tradingview`), but TradingView should use port 80 through nginx-proxy.
 
 ## TradingView JSON Payload Schema
 

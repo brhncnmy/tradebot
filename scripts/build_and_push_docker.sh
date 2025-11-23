@@ -64,7 +64,7 @@ update_env_file() {
 }
 
 # Build and push images for linux/amd64 using buildx
-SERVICES=("tv-listener" "signal-orchestrator" "order-gateway")
+SERVICES=("tv-listener" "signal-orchestrator" "order-gateway" "nginx-proxy")
 
 for SERVICE in "${SERVICES[@]}"; do
   DOCKERFILE="docker/${SERVICE}.Dockerfile"

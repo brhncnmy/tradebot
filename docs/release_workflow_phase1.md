@@ -2,6 +2,7 @@
 
 This document describes how to build, tag, push, and deploy Docker images for the Phase 1 TradingView pipeline:
 
+- `nginx-proxy` (reverse proxy on port 80)
 - `tv-listener`
 - `signal-orchestrator`
 - `order-gateway`
@@ -36,12 +37,14 @@ The `scripts/build_and_push_docker.sh` release script automatically updates `.en
 
 Phase 1 uses one image per service:
 
+- `nginx-proxy` (reverse proxy on port 80)
 - `tv-listener`
 - `signal-orchestrator`
 - `order-gateway`
 
 Images are published under a registry namespace defined by the `TB_DOCKER_NAMESPACE` environment variable. The final image names are:
 
+- `${TB_DOCKER_NAMESPACE}/nginx-proxy:<TAG>`
 - `${TB_DOCKER_NAMESPACE}/tv-listener:<TAG>`
 - `${TB_DOCKER_NAMESPACE}/signal-orchestrator:<TAG>`
 - `${TB_DOCKER_NAMESPACE}/order-gateway:<TAG>`
@@ -56,6 +59,7 @@ TB_DOCKER_NAMESPACE=bcanmaya
 
 **Images:**
 
+- `bcanmaya/nginx-proxy:v0.1.0`
 - `bcanmaya/tv-listener:v0.1.0`
 - `bcanmaya/signal-orchestrator:v0.1.0`
 - `bcanmaya/order-gateway:v0.1.0`
@@ -92,8 +96,10 @@ This script:
 
 - Pulls the latest code from `main`,
 - Uses the committed `.env` file to determine `TB_DOCKER_NAMESPACE` and `TRADEBOT_TAG`,
-- Pulls the corresponding images,
-- Restarts the Phase 1 services with `docker compose up -d`.
+- Pulls the corresponding images (including nginx-proxy),
+- Restarts the Phase 1 services with `docker compose up -d` (including nginx-proxy on port 80).
+
+The reverse proxy on port 80 is now part of the standard deployment, providing external access to the TradingView webhook endpoint.
 
 ## 5. Git Commit & Push
 
