@@ -77,6 +77,20 @@ async def handle_bingx_order(account_cfg, request: OpenOrderRequest):
         }
     
     # Test, demo, or live mode: make API call
+    # Read credentials to log status (without exposing secrets)
+    import os
+    api_key = os.getenv(account_cfg.api_key_env or "")
+    secret_key = os.getenv(account_cfg.secret_key_env or "")
+    
+    logger.info(
+        "BingX account resolved: id=%s, exchange=%s, mode=%s, has_api_key=%s, has_secret=%s",
+        account_cfg.account_id,
+        account_cfg.exchange,
+        account_cfg.mode,
+        bool(api_key),
+        bool(secret_key),
+    )
+    
     try:
         response = await bingx_place_order(account_cfg, request)
         

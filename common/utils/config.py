@@ -19,9 +19,9 @@ _accounts: Dict[str, AccountConfig] = {
         account_id="bingx_primary",
         exchange="bingx",
         mode="test",  # Test mode: uses /order/test endpoint (no real orders)
-        api_key_env="BINGX_PRIMARY_API_KEY",
-        secret_key_env="BINGX_PRIMARY_SECRET_KEY",
-        source_key_env="BINGX_PRIMARY_SOURCE_KEY"
+        api_key_env="BINGX_API_KEY",
+        secret_key_env="BINGX_API_SECRET",
+        source_key_env=None  # Optional, not in .env by default
     )
 }
 
