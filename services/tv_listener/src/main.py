@@ -33,6 +33,35 @@ class TradingViewWebhookPayload(BaseModel):
     strategy_name: Optional[str] = None
 
 
+def normalize_symbol(symbol: str) -> str:
+    """
+    Normalize a TradingView symbol string into an exchange-agnostic symbol.
+    
+    Examples:
+    - "BINANCE:LIGHTUSDT.P" -> "LIGHTUSDT"
+    - "BINANCE:BTCUSDT.P"   -> "BTCUSDT"
+    - "BTC-USDT"            -> "BTC-USDT" (left as-is)
+    - "BINANCE:BTCUSDT"     -> "BTCUSDT"
+    
+    Args:
+        symbol: Raw symbol string from TradingView (may include exchange prefix and suffix)
+        
+    Returns:
+        Normalized symbol string (exchange-agnostic)
+    """
+    s = symbol.strip()
+    
+    # Drop exchange prefix if present (e.g. "BINANCE:LIGHTUSDT.P")
+    if ":" in s:
+        s = s.split(":", 1)[1]
+    
+    # Drop simple suffixes like ".P" or ".p"
+    if s.endswith(".P") or s.endswith(".p"):
+        s = s[:-2]
+    
+    return s
+
+
 def map_tradingview_payload_to_normalized_signal(payload: TradingViewWebhookPayload) -> NormalizedSignal:
     """
     Map TradingView webhook payload to NormalizedSignal.
@@ -73,11 +102,14 @@ def map_tradingview_payload_to_normalized_signal(payload: TradingViewWebhookPayl
     # Determine routing_profile
     routing_profile = payload.routing_profile or "default"
     
+    # Normalize symbol (e.g. "BINANCE:LIGHTUSDT.P" -> "LIGHTUSDT")
+    normalized_symbol = normalize_symbol(payload.symbol)
+    
     # Build NormalizedSignal
     return NormalizedSignal(
         source="tradingview",
         strategy_name=payload.strategy_name,
-        symbol=payload.symbol,
+        symbol=normalized_symbol,
         side=normalized_side,
         entry_type=normalized_entry_type,
         entry_price=payload.entry_price,
@@ -87,7 +119,7 @@ def map_tradingview_payload_to_normalized_signal(payload: TradingViewWebhookPayl
         take_profits=tp_list,
         routing_profile=routing_profile,
         timestamp=datetime.utcnow(),
-        raw_payload=payload.dict()
+        raw_payload=payload.model_dump()  # keep original symbol inside raw payload
     )
 
 
@@ -129,7 +161,7 @@ async def tradingview_webhook(payload: TradingViewWebhookPayload):
     Returns:
         Response with forwarding status
     """
-    logger.info(f"Received TradingView webhook: {payload.dict()}")
+    logger.info(f"Received TradingView webhook: {payload.model_dump()}")
     
     try:
         signal = map_tradingview_payload_to_normalized_signal(payload)

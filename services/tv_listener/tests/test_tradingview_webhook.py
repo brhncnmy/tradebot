@@ -77,3 +77,52 @@ def test_invalid_side_results_in_400():
     assert response.status_code == 400
     assert "Invalid side" in response.json()["detail"]
 
+
+@patch("services.tv_listener.src.main.httpx.AsyncClient")
+def test_symbol_normalization(mock_client_class):
+    """Test that TradingView ticker symbols are normalized correctly."""
+    payload = {
+        "symbol": "BINANCE:LIGHTUSDT.P",
+        "side": "buy",
+        "entry_type": "market",
+        "quantity": 0.001,
+        "stop_loss": 28000.0,
+        "take_profits": [],
+        "routing_profile": "default",
+        "leverage": 10,
+        "strategy_name": "tv_test_strategy",
+    }
+    
+    # Capture the JSON payload sent to signal-orchestrator
+    captured_json = {}
+    
+    # Mock httpx.AsyncClient.post
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"ok": True}
+    
+    async def capture_post(url, json=None, timeout=None, **kwargs):
+        captured_json["url"] = url
+        captured_json["json"] = json
+        return mock_response
+    
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post = AsyncMock(side_effect=capture_post)
+    mock_client_class.return_value = mock_client
+    
+    response = client.post("/webhook/tradingview", json=payload)
+    
+    assert response.status_code == 200
+    assert response.json()["status"] == "forwarded"
+    
+    # Verify the forwarded JSON payload has normalized symbol
+    assert "json" in captured_json
+    forwarded_payload = captured_json["json"]
+    assert forwarded_payload["symbol"] == "LIGHTUSDT"
+    
+    # Verify the original symbol is preserved in raw_payload
+    assert "raw_payload" in forwarded_payload
+    assert forwarded_payload["raw_payload"]["symbol"] == "BINANCE:LIGHTUSDT.P"
+

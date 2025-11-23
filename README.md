@@ -30,8 +30,9 @@ In Phase 1, TradeBot supports a simple end-to-end pipeline from TradingView to B
    This uses HTTP on port 80 (no explicit port in the URL). The nginx-proxy forwards requests to tv-listener internally.
 
 3. In TradingView, configure an alert with:
-   - Webhook URL: your externally reachable URL.
-   - Message: a JSON payload matching the format described in `docs/phase1_tradingview_pipeline.md`.
+   - **Webhook URL**: `http://<server-ip>/webhook/tradingview`
+   - **Message**: Copy the JSON from `templates/tradingview_alert_template.json`.  
+     This template uses TradingView placeholders (`{{ticker}}`, `{{strategy.order.action}}`) and tv-listener normalizes the symbol for routing.
 
 4. Verify behavior:
    - When an alert fires, tv-listener forwards it to signal-orchestrator.

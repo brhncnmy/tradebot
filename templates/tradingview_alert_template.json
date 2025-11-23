@@ -1,0 +1,17 @@
+{
+  "source": "tradingview",
+  "strategy_name": "ZenNadaWater_1m",
+  "symbol": "{{ticker}}",
+  "side": "{{strategy.order.action}}",
+  "entry_type": "market",
+  "entry_price": null,
+  "quantity": 0.001,
+  "leverage": 10.0,
+  "stop_loss": 28000.0,
+  "take_profits": [
+    { "price": 31000.0, "size_pct": 50.0 },
+    { "price": 32000.0, "size_pct": 50.0 }
+  ],
+  "routing_profile": "default"
+}
+

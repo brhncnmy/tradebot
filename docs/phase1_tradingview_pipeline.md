@@ -36,7 +36,7 @@ This uses HTTP on port 80 (no explicit port in the URL). The nginx-proxy forward
 
 The webhook expects a JSON payload matching the `TradingViewWebhookPayload` schema:
 
-- **`symbol`** (string, required) – Trading symbol, e.g., `"BTC-USDT"`.
+- **`symbol`** (string, required) – Trading symbol. Can be a clean symbol like `"BTC-USDT"` or a TradingView ticker like `"BINANCE:LIGHTUSDT.P"`. The tv-listener automatically normalizes ticker formats (e.g., `"BINANCE:LIGHTUSDT.P"` → `"LIGHTUSDT"`).
 
 - **`side`** (string, required) – Position direction: `"long"`, `"short"`, `"buy"`, or `"sell"` (case-insensitive). `"buy"` is treated as `"long"`, `"sell"` as `"short"`.
 
@@ -84,9 +84,51 @@ To configure a TradingView alert:
 
 1. **Alert type**: Use any TradingView strategy or condition that supports webhook alerts.
 
-2. **Webhook URL**: Set the webhook URL to your externally exposed tv-listener endpoint (e.g., `https://<your-domain>/tv-listener/webhook/tradingview`).
+2. **Webhook URL**: Set the webhook URL to:
+   ```
+   http://<server-ip>/webhook/tradingview
+   ```
 
-3. **Message**: In the alert message field, paste the JSON payload exactly as shown in the example above. TradingView will send this JSON as-is in the webhook POST request body.
+3. **Message**: Use the JSON template from `templates/tradingview_alert_template.json` (see below). TradingView will expand placeholders like `{{ticker}}` and `{{strategy.order.action}}` before sending the webhook.
+
+### Alert message template (with TradingView placeholders)
+
+Use the following JSON in the TradingView **Message** field:
+
+```json
+{
+  "source": "tradingview",
+  "strategy_name": "ZenNadaWater_1m",
+  "symbol": "{{ticker}}",
+  "side": "{{strategy.order.action}}",
+  "entry_type": "market",
+  "entry_price": null,
+  "quantity": 0.001,
+  "leverage": 10.0,
+  "stop_loss": 28000.0,
+  "take_profits": [
+    { "price": 31000.0, "size_pct": 50.0 },
+    { "price": 32000.0, "size_pct": 50.0 }
+  ],
+  "routing_profile": "default"
+}
+```
+
+**Key placeholders:**
+
+- **`{{ticker}}`**  
+  Expands to the current chart symbol, for example `BINANCE:LIGHTUSDT.P`.  
+  The tv-listener service normalizes this into a clean symbol such as `LIGHTUSDT` before routing the signal, so the same alert template can be reused across multiple symbols.
+
+- **`{{strategy.order.action}}`**  
+  Expands to `buy` or `sell` depending on the strategy order.  
+  The tv-listener maps `buy` to `long` and `sell` to `short` in the normalized signal.
+
+**Other fields:**
+
+- Numeric fields (`quantity`, `leverage`, `stop_loss`, `take_profits`) are static examples and can be tuned per strategy.
+- `entry_type` can be set to `"limit"` if you want limit orders (requires `entry_price`).
+- `routing_profile` defaults to `"default"` if omitted.
 
 ## DRY_RUN vs LIVE
 
