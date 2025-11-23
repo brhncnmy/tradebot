@@ -25,15 +25,23 @@ def test_valid_payload_forwarded(mock_client_class):
         "strategy_name": "tv_test_strategy",
     }
     
+    # Capture the JSON payload sent to signal-orchestrator
+    captured_json = {}
+    
     # Mock httpx.AsyncClient.post
     mock_response = AsyncMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {"ok": True}
     
+    async def capture_post(url, json=None, timeout=None, **kwargs):
+        captured_json["url"] = url
+        captured_json["json"] = json
+        return mock_response
+    
     mock_client = AsyncMock()
     mock_client.__aenter__.return_value = mock_client
     mock_client.__aexit__.return_value = None
-    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client.post = AsyncMock(side_effect=capture_post)
     mock_client_class.return_value = mock_client
     
     response = client.post("/webhook/tradingview", json=payload)
@@ -46,6 +54,13 @@ def test_valid_payload_forwarded(mock_client_class):
     mock_client.post.assert_called_once()
     call_args = mock_client.post.call_args
     assert call_args[0][0].endswith("/signals")
+    
+    # Verify the forwarded JSON payload has a string timestamp
+    assert "json" in captured_json
+    forwarded_payload = captured_json["json"]
+    assert "timestamp" in forwarded_payload
+    assert isinstance(forwarded_payload["timestamp"], str)
+    assert forwarded_payload["timestamp"]  # non-empty string
 
 
 def test_invalid_side_results_in_400():

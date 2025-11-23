@@ -140,16 +140,17 @@ async def tradingview_webhook(payload: TradingViewWebhookPayload):
             detail=str(err)
         )
     
-    logger.info(f"Mapped to normalized signal: {signal.dict()}")
+    logger.info(f"Mapped to normalized signal: {signal.model_dump(mode='json')}")
     
     # Read env for signal orchestrator URL
     base_url = os.getenv("SIGNAL_ORCHESTRATOR_URL", "http://signal-orchestrator:8001")
     url = f"{base_url.rstrip('/')}/signals"
     
-    # Forward to signal-orchestrator
+    # Forward to signal-orchestrator using JSON-safe serialization
+    payload = signal.model_dump(mode="json")
     async with httpx.AsyncClient(timeout=5.0) as client:
         try:
-            resp = await client.post(url, json=signal.dict())
+            resp = await client.post(url, json=payload)
             logger.info(f"Forwarded signal to orchestrator, status: {resp.status_code}")
             return {
                 "status": "forwarded",
