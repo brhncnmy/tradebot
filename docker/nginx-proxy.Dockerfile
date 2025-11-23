@@ -9,3 +9,4 @@ COPY docker/nginx-proxy.conf /etc/nginx/conf.d/default.conf
 # Expose port 80 inside the container
 EXPOSE 80
 
+

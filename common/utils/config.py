@@ -7,7 +7,7 @@ class AccountConfig(BaseModel):
     """Trading account configuration."""
     account_id: str
     exchange: str
-    mode: Literal["DRY_RUN", "LIVE"]
+    mode: Literal["dry", "test", "demo", "live"] = "dry"
     api_key_env: Optional[str] = None
     secret_key_env: Optional[str] = None
     source_key_env: Optional[str] = None
@@ -18,7 +18,7 @@ _accounts: Dict[str, AccountConfig] = {
     "bingx_primary": AccountConfig(
         account_id="bingx_primary",
         exchange="bingx",
-        mode="DRY_RUN",
+        mode="test",  # Test mode: uses /order/test endpoint (no real orders)
         api_key_env="BINGX_PRIMARY_API_KEY",
         secret_key_env="BINGX_PRIMARY_SECRET_KEY",
         source_key_env="BINGX_PRIMARY_SOURCE_KEY"

@@ -130,32 +130,51 @@ Use the following JSON in the TradingView **Message** field:
 - `entry_type` can be set to `"limit"` if you want limit orders (requires `entry_price`).
 - `routing_profile` defaults to `"default"` if omitted.
 
-## DRY_RUN vs LIVE
+## Account Modes
 
-Account modes are configured in `common/utils/config.py`:
+Account modes are configured in `common/utils/config.py`. Each account can be set to one of four modes:
 
-- The default `bingx_primary` account is configured with `mode="DRY_RUN"` for safety.
+- **`dry`**: Log only, no API calls. Orders are logged but not sent to the exchange. Returns fake order IDs like `dryrun-...`.
 
-- To enable LIVE trading:
+- **`test`**: Test Order endpoint (`/openApi/swap/v2/trade/order/test` on PROD host). Validates order parameters without placing real orders. Requires API credentials.
 
-  1. Change the account mode to `LIVE` in the config:
+- **`demo`**: Demo trading endpoint (`/openApi/swap/v2/trade/order` on VST host). Places orders in demo environment with virtual USDT. Requires API credentials.
 
-     ```python
-     "bingx_primary": AccountConfig(
-         account_id="bingx_primary",
-         exchange="bingx",
-         mode="LIVE",  # Changed from DRY_RUN
-         api_key_env="BINGX_PRIMARY_API_KEY",
-         secret_key_env="BINGX_PRIMARY_SECRET_KEY",
-         source_key_env="BINGX_PRIMARY_SOURCE_KEY"
-     )
-     ```
+- **`live`**: Real trading endpoint (`/openApi/swap/v2/trade/order` on PROD host). Places actual orders with real funds. Requires API credentials and careful testing.
 
-  2. Set the required environment variables:
+### Default Configuration
 
-     - `BINGX_PRIMARY_API_KEY` – Your BingX API key
-     - `BINGX_PRIMARY_SECRET_KEY` – Your BingX secret key
-     - `BINGX_PRIMARY_SOURCE_KEY` – Optional source key
+The default `bingx_primary` account is configured with `mode="test"` for safety. This mode:
+- Validates order parameters against BingX API
+- Does not place real orders
+- Requires valid API credentials
 
-  3. **Important**: Thoroughly test your pipeline in `DRY_RUN` mode before enabling `LIVE` mode. Verify that signals are correctly routed, orders are properly formatted, and the system behaves as expected.
+### Changing Account Mode
+
+To change the account mode:
+
+1. Edit `common/utils/config.py`:
+
+   ```python
+   "bingx_primary": AccountConfig(
+       account_id="bingx_primary",
+       exchange="bingx",
+       mode="live",  # Options: "dry", "test", "demo", "live"
+       api_key_env="BINGX_PRIMARY_API_KEY",
+       secret_key_env="BINGX_PRIMARY_SECRET_KEY",
+       source_key_env="BINGX_PRIMARY_SOURCE_KEY"
+   )
+   ```
+
+2. Set the required environment variables (for `test`, `demo`, or `live` modes):
+
+   - `BINGX_PRIMARY_API_KEY` – Your BingX API key
+   - `BINGX_PRIMARY_SECRET_KEY` – Your BingX secret key
+   - `BINGX_PRIMARY_SOURCE_KEY` – Optional source key
+
+3. **Important**: 
+   - Start with `dry` mode to verify logging
+   - Then use `test` mode to validate API integration
+   - Test thoroughly in `demo` mode before enabling `live` mode
+   - Verify that signals are correctly routed, orders are properly formatted, and the system behaves as expected
 
