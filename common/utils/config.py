@@ -22,12 +22,20 @@ _accounts: Dict[str, AccountConfig] = {
         api_key_env="BINGX_API_KEY",
         secret_key_env="BINGX_API_SECRET",
         source_key_env=None  # Optional, not in .env by default
+    ),
+    "bingx_vst_demo": AccountConfig(
+        account_id="bingx_vst_demo",
+        exchange="bingx",
+        mode="demo",  # Demo mode: uses VST host with virtual USDT
+        api_key_env="BINGX_VST_API_KEY",
+        secret_key_env="BINGX_VST_API_SECRET",
+        source_key_env=None  # Optional, not in .env by default
     )
 }
 
 # In-memory routing profiles
 _routing_profiles: Dict[str, List[str]] = {
-    "default": ["bingx_primary"]
+    "default": ["bingx_vst_demo"]
 }
 
 

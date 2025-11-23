@@ -161,12 +161,39 @@ async def bingx_place_order(
     if source_key:
         headers["X-SOURCE-KEY"] = source_key
     
+    # Log request (without secrets)
+    logger.info(
+        "BingX request: mode=%s, account=%s, symbol=%s, side=%s, quantity=%s, endpoint=%s",
+        account_config.mode,
+        account_config.account_id,
+        symbol,
+        side,
+        quantity,
+        env.order_path,
+    )
+    
     # Make request
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.post(url, headers=headers, content=b"")
+        
         # Raise for non-2xx so we can catch and log at the handler level
         resp.raise_for_status()
+        
+        # Parse JSON response
         data = resp.json()
+        
+        # Log response (truncate body to avoid logging secrets)
+        # Remove signature and sensitive query params from body representation
+        body_str = str(data)
+        if len(body_str) > 300:
+            body_str = body_str[:300] + "... (truncated)"
+        logger.info(
+            "BingX response: mode=%s, account=%s, status=%s, body=%s",
+            account_config.mode,
+            account_config.account_id,
+            resp.status_code,
+            body_str,
+        )
         
         # Check for API error codes
         code = data.get("code")

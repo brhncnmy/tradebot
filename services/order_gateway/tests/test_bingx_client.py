@@ -154,3 +154,70 @@ async def test_bingx_place_order_missing_credentials():
         with pytest.raises(ValueError, match="Missing API credentials"):
             await bingx_place_order(account_config, order)
 
+
+@pytest.mark.asyncio
+async def test_bingx_place_order_demo_mode():
+    """Test BingX order placement in demo mode (VST host)."""
+    account_config = AccountConfig(
+        account_id="demo_account",
+        exchange="bingx",
+        mode="demo",
+        api_key_env="VST_API_KEY",
+        secret_key_env="VST_SECRET_KEY",
+    )
+    
+    order = OpenOrderRequest(
+        account=AccountRef(exchange="bingx", account_id="demo_account"),
+        symbol="BTCUSDT",
+        side="long",
+        entry_type="market",
+        quantity=0.001,
+    )
+    
+    # Mock environment variables
+    with patch.dict(os.environ, {"VST_API_KEY": "vst_key", "VST_SECRET_KEY": "vst_secret"}):
+        # Create a mock response object
+        class MockResponse:
+            def __init__(self):
+                self.status_code = 200
+                
+            def json(self):
+                return {"code": 0, "data": {"orderId": "67890"}}
+                
+            def raise_for_status(self):
+                pass
+        
+        mock_response = MockResponse()
+        captured_url = None
+        
+        async def mock_post(url, headers, content, **kwargs):
+            nonlocal captured_url
+            captured_url = url
+            # Verify URL uses VST host
+            assert "open-api-vst.bingx.com" in url
+            # Verify URL does NOT contain /order/test (demo uses /order)
+            assert "/order/test" not in url
+            assert "/order" in url
+            # Verify symbol is converted to BingX format
+            assert "symbol=BTC-USDT" in url
+            # Verify headers include API key
+            assert "X-BX-APIKEY" in headers
+            assert headers["X-BX-APIKEY"] == "vst_key"
+            # Verify signature is present
+            assert "signature=" in url
+            return mock_response
+        
+        with patch("services.order_gateway.src.exchanges.bingx_client.httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client.post = mock_post
+            mock_client_class.return_value = mock_client
+            
+            result = await bingx_place_order(account_config, order)
+            
+            assert result["code"] == 0
+            assert result["data"]["orderId"] == "67890"
+            # Verify VST host was used
+            assert "open-api-vst.bingx.com" in captured_url
+
