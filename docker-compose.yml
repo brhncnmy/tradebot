@@ -52,11 +52,8 @@ services:
     container_name: order-gateway
     ports:
       - "8002:8002"
-    environment:
-      - BINGX_API_KEY=${BINGX_API_KEY}
-      - BINGX_API_SECRET=${BINGX_API_SECRET}
-      - BINGX_VST_API_KEY=${BINGX_VST_API_KEY}
-      - BINGX_VST_API_SECRET=${BINGX_VST_API_SECRET}
+    env_file:
+      - .env.bingx
     networks:
       - tradebot-net
 

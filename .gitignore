@@ -1,0 +1,5 @@
+# .gitignore
+
+# Environment files
+.env.bingx
+

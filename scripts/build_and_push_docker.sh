@@ -39,27 +39,49 @@ echo "Using namespace: ${TB_DOCKER_NAMESPACE}"
 echo "Using tag: ${TAG} (base: ${BASE_TAG}, git: ${GIT_SHA})"
 
 # Helper function to update .env file (called only after successful build/push)
+# Only updates TRADEBOT_TAG in-place, preserving all other lines
 update_env_file() {
   local env_file="${ROOT_DIR}/.env"
   echo "Updating ${env_file} with TB_DOCKER_NAMESPACE and TRADEBOT_TAG..."
 
-  # Create a temp file to avoid partially written env
-  local tmp_env_file="${env_file}.tmp"
-
-  # If .env exists, strip existing TB_DOCKER_NAMESPACE and TRADEBOT_TAG lines
-  if [[ -f "${env_file}" ]]; then
-    grep -vE '^(TB_DOCKER_NAMESPACE|TRADEBOT_TAG)=' "${env_file}" > "${tmp_env_file}" || true
-  else
-    : > "${tmp_env_file}"
+  # If .env does not exist, create it
+  if [[ ! -f "${env_file}" ]]; then
+    {
+      echo "TB_DOCKER_NAMESPACE=${TB_DOCKER_NAMESPACE}"
+      echo "TRADEBOT_TAG=${TAG}"
+    } > "${env_file}"
+    echo "Created ${env_file} with namespace=${TB_DOCKER_NAMESPACE} and tag=${TAG}"
+    return 0
   fi
 
-  # Append the canonical namespace and tag for this release
-  {
-    echo "TB_DOCKER_NAMESPACE=${TB_DOCKER_NAMESPACE}"
-    echo "TRADEBOT_TAG=${TAG}"
-  } >> "${tmp_env_file}"
+  # Update TRADEBOT_TAG line in-place if it exists, otherwise append
+  if grep -q '^TRADEBOT_TAG=' "${env_file}"; then
+    # Replace existing TRADEBOT_TAG line
+    if [[ "$(uname)" == "Darwin" ]]; then
+      # macOS sed requires -i '' for in-place editing
+      sed -i '' "s|^TRADEBOT_TAG=.*|TRADEBOT_TAG=${TAG}|" "${env_file}"
+    else
+      # Linux sed
+      sed -i "s|^TRADEBOT_TAG=.*|TRADEBOT_TAG=${TAG}|" "${env_file}"
+    fi
+  else
+    # Append TRADEBOT_TAG if it doesn't exist
+    echo "TRADEBOT_TAG=${TAG}" >> "${env_file}"
+  fi
 
-  mv "${tmp_env_file}" "${env_file}"
+  # Update TB_DOCKER_NAMESPACE line in-place if it exists, otherwise append
+  if grep -q '^TB_DOCKER_NAMESPACE=' "${env_file}"; then
+    # Replace existing TB_DOCKER_NAMESPACE line
+    if [[ "$(uname)" == "Darwin" ]]; then
+      sed -i '' "s|^TB_DOCKER_NAMESPACE=.*|TB_DOCKER_NAMESPACE=${TB_DOCKER_NAMESPACE}|" "${env_file}"
+    else
+      sed -i "s|^TB_DOCKER_NAMESPACE=.*|TB_DOCKER_NAMESPACE=${TB_DOCKER_NAMESPACE}|" "${env_file}"
+    fi
+  else
+    # Append TB_DOCKER_NAMESPACE if it doesn't exist
+    echo "TB_DOCKER_NAMESPACE=${TB_DOCKER_NAMESPACE}" >> "${env_file}"
+  fi
+
   echo "Updated ${env_file} with namespace=${TB_DOCKER_NAMESPACE} and tag=${TAG}"
 }
 

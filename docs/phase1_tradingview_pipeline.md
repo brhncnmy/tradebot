@@ -160,21 +160,68 @@ To change the account mode:
        account_id="bingx_primary",
        exchange="bingx",
        mode="live",  # Options: "dry", "test", "demo", "live"
-       api_key_env="BINGX_PRIMARY_API_KEY",
-       secret_key_env="BINGX_PRIMARY_SECRET_KEY",
-       source_key_env="BINGX_PRIMARY_SOURCE_KEY"
+       api_key_env="BINGX_API_KEY",
+       secret_key_env="BINGX_API_SECRET",
+       source_key_env=None  # Optional
    )
    ```
 
-2. Set the required environment variables (for `test`, `demo`, or `live` modes):
+2. Ensure `.env.bingx` contains the required credentials (for `test`, `demo`, or `live` modes):
 
-   - `BINGX_PRIMARY_API_KEY` – Your BingX API key
-   - `BINGX_PRIMARY_SECRET_KEY` – Your BingX secret key
-   - `BINGX_PRIMARY_SOURCE_KEY` – Optional source key
+   - `BINGX_API_KEY` – Your BingX API key
+   - `BINGX_API_SECRET` – Your BingX secret key
+   - `BINGX_VST_API_KEY` – Optional VST (demo) API key
+   - `BINGX_VST_API_SECRET` – Optional VST (demo) API secret
 
-3. **Important**: 
+  3. **Important**: 
    - Start with `dry` mode to verify logging
    - Then use `test` mode to validate API integration
    - Test thoroughly in `demo` mode before enabling `live` mode
    - Verify that signals are correctly routed, orders are properly formatted, and the system behaves as expected
+
+## Environment Variables and Secrets
+
+TradeBot uses separate files for project metadata and API secrets:
+
+### `.env` (Project Metadata)
+
+The `.env` file in the repo root contains project-level metadata that is managed by release scripts:
+
+- `TB_DOCKER_NAMESPACE` – Docker Hub namespace (e.g., `burhancanmaya`)
+- `TRADEBOT_TAG` – Current release tag (e.g., `v0.1.6`)
+
+**Important**: The release script (`scripts/release_phase1.sh`) updates `TRADEBOT_TAG` in-place without removing other lines. You can add custom entries to `.env`, but they should not conflict with the managed variables.
+
+### `.env.bingx` (BingX API Secrets)
+
+The `.env.bingx` file contains BingX API credentials and is **not committed to git** (it's in `.gitignore`):
+
+- `BINGX_API_KEY` – BingX API key for test/live trading
+- `BINGX_API_SECRET` – BingX API secret for test/live trading
+- `BINGX_VST_API_KEY` – BingX VST (demo) API key (optional)
+- `BINGX_VST_API_SECRET` – BingX VST (demo) API secret (optional)
+
+**Setup on server**:
+
+1. Create `.env.bingx` in the repo root on the server:
+
+   ```bash
+   cd ~/tradebot
+   cat > .env.bingx << 'EOF'
+   BINGX_API_KEY=your_api_key_here
+   BINGX_API_SECRET=your_secret_here
+   BINGX_VST_API_KEY=your_vst_key_here  # Optional
+   BINGX_VST_API_SECRET=your_vst_secret_here  # Optional
+   EOF
+   ```
+
+2. The `order-gateway` service automatically loads these variables via `env_file: - .env.bingx` in `docker-compose.yml`.
+
+3. Verify credentials are loaded:
+
+   ```bash
+   docker compose exec order-gateway env | grep BINGX
+   ```
+
+**Note**: The `order-gateway` service does not read `BINGX_*` variables from `.env`. It only uses `.env.bingx` through the `env_file` directive in `docker-compose.yml`.
 
