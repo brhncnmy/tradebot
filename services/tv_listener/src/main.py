@@ -60,6 +60,9 @@ class TradingViewWebhookPayload(BaseModel):
     order_type: Optional[str] = Field(default="market", description="Order type: market or limit")
     entry_type: Optional[str] = Field(None, description="Legacy field: same as order_type")
     
+    # Code field: used to determine entry/exit intent
+    code: Optional[str] = Field(None, description="TradingView code field (e.g., 'short entry', 'long exit')")
+    
     # Optional fields
     entry_price: Optional[float] = None
     quantity: Optional[float] = None
@@ -134,17 +137,122 @@ def _map_command_to_side(command: TvCommand) -> Optional[Side]:
     """Map TradingView command to a logical side when applicable."""
     if command in (
         TvCommand.ENTER_LONG,
+        TvCommand.EXIT_LONG,
         TvCommand.EXIT_LONG_ALL,
         TvCommand.EXIT_LONG_PARTIAL,
     ):
         return "long"
     if command in (
         TvCommand.ENTER_SHORT,
+        TvCommand.EXIT_SHORT,
         TvCommand.EXIT_SHORT_ALL,
         TvCommand.EXIT_SHORT_PARTIAL,
     ):
         return "short"
     return None
+
+
+def normalize_tradingview_payload(payload: TradingViewWebhookPayload) -> tuple[str, Optional[str]]:
+    """
+    Normalize TradingView payload to determine command and side.
+    
+    Uses the 'code' field first to determine entry/exit intent, then falls back
+    to side-based logic for backward compatibility. Also handles direct command values.
+    
+    Args:
+        payload: TradingViewWebhookPayload instance
+        
+    Returns:
+        Tuple of (command_str, side_norm) where:
+        - command_str: One of "ENTER_LONG", "ENTER_SHORT", "EXIT_LONG", "EXIT_SHORT", etc.
+        - side_norm: "long" or "short" or None
+        
+    Raises:
+        ValueError: If required fields are invalid or missing
+    """
+    # Check if command is already a full command (e.g., "ENTER_LONG", "EXIT_SHORT")
+    command_str = (payload.command or "ENTER").strip().upper()
+    
+    # Try to parse as a known command first
+    try:
+        TvCommand(command_str)
+        # Command is valid, derive side from command
+        if command_str.startswith("ENTER_LONG") or command_str.startswith("EXIT_LONG"):
+            side_norm = "long"
+        elif command_str.startswith("ENTER_SHORT") or command_str.startswith("EXIT_SHORT"):
+            side_norm = "short"
+        else:
+            side_norm = None
+        return command_str, side_norm
+    except (ValueError, AttributeError):
+        # Command is not a known full command, continue with code/side logic
+        pass
+    
+    # Normalize side if provided
+    side_norm: Optional[str] = None
+    if payload.side:
+        try:
+            side_raw = payload.side.lower().strip()
+            if side_raw in ["buy", "long"]:
+                side_norm = "long"
+            elif side_raw in ["sell", "short"]:
+                side_norm = "short"
+            else:
+                logger.warning(f"Invalid side value: {payload.side}")
+                raise ValueError(f"Invalid side value: {payload.side}. Must be one of: buy, sell, long, short")
+        except ValueError as e:
+            raise ValueError(f"Invalid side: {e}") from e
+    
+    # Determine base intent using code first
+    code_raw = (payload.code or "").lower().strip()
+    intent = "ENTER"  # default
+    dir_from_code: Optional[str] = None
+    
+    if "short exit" in code_raw:
+        intent = "EXIT"
+        dir_from_code = "short"
+    elif "long exit" in code_raw:
+        intent = "EXIT"
+        dir_from_code = "long"
+    elif "short entry" in code_raw:
+        intent = "ENTER"
+        dir_from_code = "short"
+    elif "long entry" in code_raw:
+        intent = "ENTER"
+        dir_from_code = "long"
+    else:
+        # Fallback: use side for backward compatibility
+        if side_norm:
+            intent = "ENTER"
+            dir_from_code = side_norm
+    
+    # Derive final command from (intent, dir)
+    if intent == "ENTER" and dir_from_code == "long":
+        command_str = "ENTER_LONG"
+    elif intent == "ENTER" and dir_from_code == "short":
+        command_str = "ENTER_SHORT"
+    elif intent == "EXIT" and dir_from_code == "long":
+        command_str = "EXIT_LONG"
+    elif intent == "EXIT" and dir_from_code == "short":
+        command_str = "EXIT_SHORT"
+    else:
+        # Final fallback: if we have side but no code match, default to ENTER
+        if side_norm:
+            if side_norm == "long":
+                command_str = "ENTER_LONG"
+            else:
+                command_str = "ENTER_SHORT"
+        else:
+            # If we still can't determine command and the original command_str was not "ENTER", 
+            # it might be an invalid command - try to parse it to get a better error
+            if command_str not in ("ENTER", ""):
+                try:
+                    TvCommand(command_str)
+                except (ValueError, AttributeError):
+                    raise ValueError(f"Unsupported command: {command_str}")
+            raise ValueError("Cannot determine command: missing both 'code' and 'side' fields")
+    
+    return command_str, side_norm
 
 
 def map_tradingview_payload_to_normalized_signal(
@@ -164,19 +272,11 @@ def map_tradingview_payload_to_normalized_signal(
     Raises:
         ValueError: If required fields are invalid or missing
     """
-    # Determine command: use provided command, or derive from side
-    command_str = (payload.command or "ENTER").strip().upper()
-    
-    # If side is provided but command is just "ENTER", derive ENTER_LONG/ENTER_SHORT from side
-    if command_str == "ENTER" and payload.side:
-        try:
-            normalized_side_str = payload.normalize_side()
-            if normalized_side_str == "LONG":
-                command_str = "ENTER_LONG"
-            elif normalized_side_str == "SHORT":
-                command_str = "ENTER_SHORT"
-        except ValueError as e:
-            raise ValueError(f"Invalid side for ENTER command: {e}") from e
+    # Normalize command and side using code field
+    try:
+        command_str, normalized_side = normalize_tradingview_payload(payload)
+    except ValueError as e:
+        raise ValueError(f"Failed to normalize payload: {e}") from e
     
     # Parse command enum
     try:
@@ -184,15 +284,14 @@ def map_tradingview_payload_to_normalized_signal(
     except Exception as exc:  # ValueError or AttributeError
         raise ValueError(f"Unsupported command: {command_str}") from exc
     
-    # Get normalized side (from command or from side field)
-    normalized_side = _map_command_to_side(command)
-    if normalized_side is None and payload.side:
-        # Fallback: normalize side field directly
-        try:
-            side_str = payload.normalize_side()
-            normalized_side = "long" if side_str == "LONG" else "short" if side_str == "SHORT" else None
-        except ValueError:
-            pass  # Will be handled by command mapping
+    # Ensure side is set from command (command takes precedence over payload side)
+    # This ensures EXIT_SHORT has side="short" even if payload has side="buy"
+    side_from_command = _map_command_to_side(command)
+    if side_from_command is not None:
+        normalized_side = side_from_command
+    elif normalized_side is None:
+        # Final fallback if command doesn't provide side
+        normalized_side = _map_command_to_side(command)
     
     # Normalize order type (prefer order_type, fallback to entry_type)
     normalized_entry_type = payload.get_order_type()
@@ -244,6 +343,7 @@ def map_tradingview_payload_to_normalized_signal(
         routing_profile=routing_profile,
         timestamp=signal_timestamp or datetime.utcnow(),
         raw_payload=raw_payload_text,
+        code=payload.code,
     )
 
 
@@ -300,12 +400,13 @@ async def tradingview_webhook(request: Request, payload: TradingViewWebhookPaylo
         )
     
     logger.info(
-        "TradingView NORMALIZED: command=%s symbol=%s side=%s entry_type=%s quantity=%s",
+        "TradingView NORMALIZED: command=%s symbol=%s side=%s entry_type=%s quantity=%s code=%s",
         signal.command.value,
         signal.symbol,
         signal.side,
         signal.entry_type,
         signal.quantity,
+        signal.code or "",
     )
     
     # Read env for signal orchestrator URL

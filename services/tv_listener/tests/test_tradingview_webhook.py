@@ -255,3 +255,129 @@ def test_command_defaults_to_enter_when_omitted(mock_client_class):
     # Command should be derived as ENTER_LONG from side="buy"
     assert forwarded_json["command"] == "ENTER_LONG"
 
+
+@patch("services.tv_listener.src.main.httpx.AsyncClient")
+def test_short_entry_with_code(mock_client_class):
+    """Test that payload with code='short entry' results in ENTER_SHORT command."""
+    payload = {
+        "command": "ENTER",
+        "symbol": "NTRNUSDT.P",
+        "side": "sell",
+        "code": "short entry",
+        "entry_type": "market",
+        "quantity": 100,
+    }
+    
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"ok": True}
+    
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+    
+    response = client.post("/webhook/tradingview", json=payload)
+    
+    assert response.status_code == 200
+    call_args = mock_client.post.call_args
+    forwarded_json = call_args[1]["json"]
+    assert forwarded_json["command"] == "ENTER_SHORT"
+    assert forwarded_json["symbol"] == "NTRNUSDT"  # Normalized
+    assert forwarded_json["side"] == "short"
+
+
+@patch("services.tv_listener.src.main.httpx.AsyncClient")
+def test_short_exit_with_code(mock_client_class):
+    """Test that payload with code='short exit' results in EXIT_SHORT command."""
+    payload = {
+        "command": "ENTER",
+        "symbol": "NTRNUSDT.P",
+        "side": "buy",
+        "code": "short exit",
+        "entry_type": "market",
+        "quantity": 5794.02,
+    }
+    
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"ok": True}
+    
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+    
+    response = client.post("/webhook/tradingview", json=payload)
+    
+    assert response.status_code == 200
+    call_args = mock_client.post.call_args
+    forwarded_json = call_args[1]["json"]
+    assert forwarded_json["command"] == "EXIT_SHORT"
+    assert forwarded_json["symbol"] == "NTRNUSDT"  # Normalized
+    assert forwarded_json["side"] == "short"
+
+
+@patch("services.tv_listener.src.main.httpx.AsyncClient")
+def test_long_entry_with_code(mock_client_class):
+    """Test that payload with code='long entry' results in ENTER_LONG command."""
+    payload = {
+        "command": "ENTER",
+        "symbol": "BTC-USDT",
+        "side": "buy",
+        "code": "long entry",
+        "entry_type": "market",
+        "quantity": 0.001,
+    }
+    
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"ok": True}
+    
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+    
+    response = client.post("/webhook/tradingview", json=payload)
+    
+    assert response.status_code == 200
+    call_args = mock_client.post.call_args
+    forwarded_json = call_args[1]["json"]
+    assert forwarded_json["command"] == "ENTER_LONG"
+    assert forwarded_json["side"] == "long"
+
+
+@patch("services.tv_listener.src.main.httpx.AsyncClient")
+def test_long_exit_with_code(mock_client_class):
+    """Test that payload with code='long exit' results in EXIT_LONG command."""
+    payload = {
+        "command": "ENTER",
+        "symbol": "BTC-USDT",
+        "side": "sell",
+        "code": "long exit",
+        "entry_type": "market",
+        "quantity": 0.001,
+    }
+    
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"ok": True}
+    
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+    
+    response = client.post("/webhook/tradingview", json=payload)
+    
+    assert response.status_code == 200
+    call_args = mock_client.post.call_args
+    forwarded_json = call_args[1]["json"]
+    assert forwarded_json["command"] == "EXIT_LONG"
+    assert forwarded_json["side"] == "long"
+

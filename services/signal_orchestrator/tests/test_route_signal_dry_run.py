@@ -79,3 +79,110 @@ def test_route_signal_dry_run(mock_client_class):
     forwarded_json = call_args[1]["json"]
     assert forwarded_json["command"] == "ENTER_LONG"
     assert forwarded_json["margin_type"] == "ISOLATED"
+
+
+@patch("services.signal_orchestrator.src.main.httpx.AsyncClient")
+def test_route_exit_short_signal(mock_client_class):
+    """Test that EXIT_SHORT signal is routed to order-gateway."""
+    payload = {
+        "command": "EXIT_SHORT",
+        "source": "tradingview",
+        "strategy_name": "tv_test_strategy",
+        "symbol": "NTRNUSDT",
+        "side": "short",
+        "entry_type": "market",
+        "entry_price": None,
+        "quantity": 5794.02,
+        "leverage": 10,
+        "margin_type": None,
+        "tp_close_pct": None,
+        "risk_per_trade_pct": None,
+        "stop_loss": None,
+        "take_profits": [],
+        "routing_profile": "default",
+        "timestamp": None,
+        "raw_payload": "{\"symbol\": \"NTRNUSDT\", \"code\": \"short exit\"}",
+        "code": "short exit",
+    }
+    
+    dummy_response = DummyResponse(
+        status_code=200,
+        json_data={
+            "status": "accepted",
+            "mode": "demo",
+            "order_id": "test-exit-order-id"
+        }
+    )
+    
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post = AsyncMock(return_value=dummy_response)
+    mock_client_class.return_value = mock_client
+    
+    response = client.post("/signals", json=payload)
+    
+    assert response.status_code == 200
+    response_data = response.json()
+    assert response_data["status"] == "processed"
+    assert response_data["routed_accounts"] == 1
+    
+    mock_client.post.assert_called_once()
+    call_args = mock_client.post.call_args
+    forwarded_json = call_args[1]["json"]
+    assert forwarded_json["command"] == "EXIT_SHORT"
+    assert forwarded_json["symbol"] == "NTRNUSDT"
+    assert forwarded_json["quantity"] == 5794.02
+
+
+@patch("services.signal_orchestrator.src.main.httpx.AsyncClient")
+def test_route_exit_long_signal(mock_client_class):
+    """Test that EXIT_LONG signal is routed to order-gateway."""
+    payload = {
+        "command": "EXIT_LONG",
+        "source": "tradingview",
+        "strategy_name": "tv_test_strategy",
+        "symbol": "BTCUSDT",
+        "side": "long",
+        "entry_type": "market",
+        "entry_price": None,
+        "quantity": 0.001,
+        "leverage": 10,
+        "margin_type": None,
+        "tp_close_pct": None,
+        "risk_per_trade_pct": None,
+        "stop_loss": None,
+        "take_profits": [],
+        "routing_profile": "default",
+        "timestamp": None,
+        "raw_payload": "{\"symbol\": \"BTCUSDT\", \"code\": \"long exit\"}",
+        "code": "long exit",
+    }
+    
+    dummy_response = DummyResponse(
+        status_code=200,
+        json_data={
+            "status": "accepted",
+            "mode": "demo",
+            "order_id": "test-exit-order-id"
+        }
+    )
+    
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post = AsyncMock(return_value=dummy_response)
+    mock_client_class.return_value = mock_client
+    
+    response = client.post("/signals", json=payload)
+    
+    assert response.status_code == 200
+    response_data = response.json()
+    assert response_data["status"] == "processed"
+    
+    mock_client.post.assert_called_once()
+    call_args = mock_client.post.call_args
+    forwarded_json = call_args[1]["json"]
+    assert forwarded_json["command"] == "EXIT_LONG"
+    assert forwarded_json["symbol"] == "BTCUSDT"
+    assert forwarded_json["side"] == "long"

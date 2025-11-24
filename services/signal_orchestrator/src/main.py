@@ -50,6 +50,7 @@ async def handle_signal(signal: NormalizedSignal):
         )
     
     logger.info(f"Routed to {len(accounts)} account(s)")
+    logger.info(f"Orchestrator: routing command={signal.command.value} symbol={signal.symbol} qty={signal.quantity}")
     
     # Validate minimal requirements
     if signal.command in (TvCommand.ENTER_LONG, TvCommand.ENTER_SHORT):
@@ -64,6 +65,20 @@ async def handle_signal(signal: NormalizedSignal):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="side required for ENTER commands"
+            )
+    elif signal.command in (TvCommand.EXIT_LONG, TvCommand.EXIT_SHORT):
+        # EXIT commands also require quantity (for now, treat as full exit)
+        if signal.quantity is None or signal.quantity <= 0:
+            logger.warning("Missing quantity for EXIT command %s", signal.command.value)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="quantity required for EXIT commands"
+            )
+        if signal.side is None:
+            logger.warning("Missing side for EXIT command %s", signal.command.value)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="side required for EXIT commands"
             )
     
     # Build order requests for each account

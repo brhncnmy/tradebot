@@ -31,6 +31,44 @@ def test_map_command_to_action_enter_long():
     assert action.margin_type == "ISOLATED"
 
 
+def test_map_command_to_action_exit_short():
+    """Verify EXIT_SHORT commands map to close-position actions."""
+    request = OpenOrderRequest(
+        account=AccountRef(exchange="bingx", account_id="bingx_vst_demo"),
+        symbol="NTRNUSDT",
+        side="short",
+        entry_type="market",
+        quantity=5794.02,
+        command=TvCommand.EXIT_SHORT,
+        take_profits=[],
+    )
+
+    action = map_command_to_action(request)
+
+    assert action.action_type == ActionType.CLOSE_POSITION_FULL
+    assert action.side == "short"
+    assert action.quantity == 5794.02
+
+
+def test_map_command_to_action_exit_long():
+    """Verify EXIT_LONG commands map to close-position actions."""
+    request = OpenOrderRequest(
+        account=AccountRef(exchange="bingx", account_id="bingx_vst_demo"),
+        symbol="BTCUSDT",
+        side="long",
+        entry_type="market",
+        quantity=0.001,
+        command=TvCommand.EXIT_LONG,
+        take_profits=[],
+    )
+
+    action = map_command_to_action(request)
+
+    assert action.action_type == ActionType.CLOSE_POSITION_FULL
+    assert action.side == "long"
+    assert action.quantity == 0.001
+
+
 def test_cancel_all_returns_ack_response():
     """Ensure CANCEL_ALL commands are accepted but not executed yet."""
     payload = {

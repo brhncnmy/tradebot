@@ -35,4 +35,5 @@ class NormalizedSignal(BaseModel):
     routing_profile: Optional[str] = Field(None, description="Routing profile name for account selection")
     timestamp: Optional[datetime] = Field(None, description="Signal timestamp")
     raw_payload: Optional[str] = Field(None, description="Original raw JSON payload from source")
+    code: Optional[str] = Field(None, description="TradingView code field (e.g., 'short entry', 'long exit')")
 

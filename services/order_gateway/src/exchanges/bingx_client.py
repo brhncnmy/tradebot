@@ -145,10 +145,21 @@ async def bingx_place_order(
     
     # Map logical side / entry_type to BingX fields
     # For now we support only MARKET entry orders
-    side = "BUY" if order.side == "long" else "SELL"
+    # Determine if this is an exit order (closing position)
+    from common.models.tv_command import TvCommand
+    is_exit = order.command in (TvCommand.EXIT_LONG, TvCommand.EXIT_SHORT, TvCommand.EXIT_LONG_ALL, TvCommand.EXIT_SHORT_ALL)
+    
+    # For entry: long → BUY, short → SELL
+    # For exit: long → SELL (close long), short → BUY (close short)
+    if is_exit:
+        # Flip the side for exit orders
+        side = "SELL" if order.side == "long" else "BUY"
+    else:
+        side = "BUY" if order.side == "long" else "SELL"
+    
     order_type = "MARKET" if order.entry_type == "market" else "LIMIT"
     
-    # Map positionSide for Hedge mode
+    # Map positionSide for Hedge mode (same for both entry and exit)
     position_side = _map_position_side(order.side)
     
     quantity = order.quantity

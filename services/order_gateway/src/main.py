@@ -67,6 +67,28 @@ def map_command_to_action(request: OpenOrderRequest) -> RoutedAction:
             leverage=request.leverage,
             command=command,
         )
+    if command == TvCommand.EXIT_LONG:
+        return RoutedAction(
+            action_type=ActionType.CLOSE_POSITION_FULL,
+            symbol=request.symbol,
+            side="long",
+            quantity=request.quantity,
+            tp_close_pct=None,
+            margin_type=request.margin_type,
+            leverage=request.leverage,
+            command=command,
+        )
+    if command == TvCommand.EXIT_SHORT:
+        return RoutedAction(
+            action_type=ActionType.CLOSE_POSITION_FULL,
+            symbol=request.symbol,
+            side="short",
+            quantity=request.quantity,
+            tp_close_pct=None,
+            margin_type=request.margin_type,
+            leverage=request.leverage,
+            command=command,
+        )
     if command == TvCommand.EXIT_LONG_ALL:
         return RoutedAction(
             action_type=ActionType.CLOSE_POSITION_FULL,
@@ -176,6 +198,21 @@ async def open_order(request: OpenOrderRequest):
         request.command.value,
     )
 
+    # For EXIT commands, allow them to go through the same order path as ENTER
+    # They will use the opposite side (BUY to close SHORT, SELL to close LONG)
+    if action.action_type == ActionType.CLOSE_POSITION_FULL and request.command in (TvCommand.EXIT_LONG, TvCommand.EXIT_SHORT):
+        # EXIT_LONG means we need to SELL (close long position)
+        # EXIT_SHORT means we need to BUY (close short position)
+        # The side in the request should already be correct from upstream
+        if request.quantity is None or request.quantity <= 0:
+            raise HTTPException(status_code=400, detail="quantity required for EXIT commands")
+        if request.side is None:
+            if action.side is None:
+                raise HTTPException(status_code=400, detail="side required for EXIT commands")
+            request = OpenOrderRequest(**request.model_dump(), side=action.side)
+        # Treat EXIT as a regular order (closing is just opening the opposite side)
+        return await handle_bingx_order(account_cfg, request)
+    
     if action.action_type != ActionType.OPEN_POSITION:
         logger.info(
             "Action %s for symbol=%s is recognized but not implemented yet (demo logging only).",
