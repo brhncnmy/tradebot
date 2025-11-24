@@ -1,15 +1,129 @@
 import os
 import uuid
+from dataclasses import dataclass
+from enum import Enum
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 
+from common.models.normalized_signal import Side
 from common.models.order_request import OpenOrderRequest
+from common.models.tv_command import TvCommand
 from common.utils.config import get_account
 from common.utils.logging import get_logger
 from services.order_gateway.src.exchanges.bingx_client import bingx_place_order
 
 app = FastAPI(title="order-gateway")
 logger = get_logger("order-gateway")
+
+
+class ActionType(str, Enum):
+    """Internal routed actions derived from TradingView commands."""
+
+    OPEN_POSITION = "OPEN_POSITION"
+    CLOSE_POSITION_FULL = "CLOSE_POSITION_FULL"
+    CLOSE_POSITION_PARTIAL = "CLOSE_POSITION_PARTIAL"
+    CLOSE_ALL_POSITIONS = "CLOSE_ALL_POSITIONS"
+
+
+@dataclass
+class RoutedAction:
+    """Action derived from a TradingView command."""
+
+    action_type: ActionType
+    symbol: str
+    side: Optional[Side]
+    quantity: Optional[float]
+    tp_close_pct: Optional[float]
+    margin_type: Optional[str]
+    leverage: Optional[float]
+    command: TvCommand
+
+
+def map_command_to_action(request: OpenOrderRequest) -> RoutedAction:
+    """Map TradingView command to an internal routed action."""
+
+    command = request.command
+
+    if command == TvCommand.ENTER_LONG:
+        return RoutedAction(
+            action_type=ActionType.OPEN_POSITION,
+            symbol=request.symbol,
+            side="long",
+            quantity=request.quantity,
+            tp_close_pct=None,
+            margin_type=request.margin_type,
+            leverage=request.leverage,
+            command=command,
+        )
+    if command == TvCommand.ENTER_SHORT:
+        return RoutedAction(
+            action_type=ActionType.OPEN_POSITION,
+            symbol=request.symbol,
+            side="short",
+            quantity=request.quantity,
+            tp_close_pct=None,
+            margin_type=request.margin_type,
+            leverage=request.leverage,
+            command=command,
+        )
+    if command == TvCommand.EXIT_LONG_ALL:
+        return RoutedAction(
+            action_type=ActionType.CLOSE_POSITION_FULL,
+            symbol=request.symbol,
+            side="long",
+            quantity=None,
+            tp_close_pct=None,
+            margin_type=request.margin_type,
+            leverage=request.leverage,
+            command=command,
+        )
+    if command == TvCommand.EXIT_SHORT_ALL:
+        return RoutedAction(
+            action_type=ActionType.CLOSE_POSITION_FULL,
+            symbol=request.symbol,
+            side="short",
+            quantity=None,
+            tp_close_pct=None,
+            margin_type=request.margin_type,
+            leverage=request.leverage,
+            command=command,
+        )
+    if command == TvCommand.EXIT_LONG_PARTIAL:
+        return RoutedAction(
+            action_type=ActionType.CLOSE_POSITION_PARTIAL,
+            symbol=request.symbol,
+            side="long",
+            quantity=None,
+            tp_close_pct=request.tp_close_pct,
+            margin_type=request.margin_type,
+            leverage=request.leverage,
+            command=command,
+        )
+    if command == TvCommand.EXIT_SHORT_PARTIAL:
+        return RoutedAction(
+            action_type=ActionType.CLOSE_POSITION_PARTIAL,
+            symbol=request.symbol,
+            side="short",
+            quantity=None,
+            tp_close_pct=request.tp_close_pct,
+            margin_type=request.margin_type,
+            leverage=request.leverage,
+            command=command,
+        )
+    if command == TvCommand.CANCEL_ALL:
+        return RoutedAction(
+            action_type=ActionType.CLOSE_ALL_POSITIONS,
+            symbol=request.symbol,
+            side=None,
+            quantity=None,
+            tp_close_pct=None,
+            margin_type=request.margin_type,
+            leverage=request.leverage,
+            command=command,
+        )
+
+    raise ValueError(f"Unhandled command: {command}")
 
 
 @app.get("/health")
@@ -42,7 +156,48 @@ async def open_order(request: OpenOrderRequest):
             status_code=400,
             detail=f"Unsupported exchange: {account_cfg.exchange}"
         )
+
+    # Interpret command into routed action
+    try:
+        action = map_command_to_action(request)
+    except ValueError as exc:
+        logger.error("Failed to map command: %s", exc)
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    logger.info(
+        "Order-gateway routed action: type=%s symbol=%s side=%s quantity=%s tp_close_pct=%s margin_type=%s leverage=%s command=%s",
+        action.action_type.value,
+        action.symbol,
+        action.side,
+        action.quantity,
+        action.tp_close_pct,
+        action.margin_type,
+        action.leverage,
+        request.command.value,
+    )
+
+    if action.action_type != ActionType.OPEN_POSITION:
+        logger.info(
+            "Action %s for symbol=%s is recognized but not implemented yet (demo logging only).",
+            action.action_type.value,
+            action.symbol,
+        )
+        return {
+            "status": "accepted",
+            "mode": account_cfg.mode,
+            "exchange": account_cfg.exchange,
+            "action": action.action_type.value,
+            "note": "Action recognized but not implemented yet",
+        }
     
+    # Ensure required fields for open position
+    if request.quantity is None or request.quantity <= 0:
+        raise HTTPException(status_code=400, detail="quantity required for OPEN_POSITION actions")
+    if request.side is None:
+        if action.side is None:
+            raise HTTPException(status_code=400, detail="side required for OPEN_POSITION actions")
+        request = OpenOrderRequest(**request.model_dump(), side=action.side)
+
     # Handle BingX orders based on mode
     return await handle_bingx_order(account_cfg, request)
 

@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException, status
 
 from common.models.normalized_signal import NormalizedSignal
 from common.models.order_request import AccountRef, OpenOrderRequest
+from common.models.tv_command import TvCommand
 from common.utils.config import get_routing_profile
 from common.utils.logging import get_logger
 
@@ -50,6 +51,21 @@ async def handle_signal(signal: NormalizedSignal):
     
     logger.info(f"Routed to {len(accounts)} account(s)")
     
+    # Validate minimal requirements
+    if signal.command in (TvCommand.ENTER_LONG, TvCommand.ENTER_SHORT):
+        if signal.quantity is None or signal.quantity <= 0:
+            logger.warning("Missing quantity for ENTER command %s", signal.command.value)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="quantity required for ENTER commands"
+            )
+        if signal.side is None:
+            logger.warning("Missing side for ENTER command %s", signal.command.value)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="side required for ENTER commands"
+            )
+    
     # Build order requests for each account
     results = []
     for account in accounts:
@@ -63,14 +79,19 @@ async def handle_signal(signal: NormalizedSignal):
             entry_type=signal.entry_type,
             price=signal.entry_price,
             leverage=signal.leverage,
-            quantity=signal.quantity or 0.0,
+            quantity=signal.quantity,
             stop_loss=signal.stop_loss,
             take_profits=signal.take_profits,
             client_order_id=None,
             meta={
                 "source": signal.source,
-                "strategy_name": signal.strategy_name
-            }
+                "strategy_name": signal.strategy_name,
+                "timestamp": signal.timestamp.isoformat() if signal.timestamp else None,
+            },
+            command=signal.command,
+            margin_type=signal.margin_type,
+            tp_close_pct=signal.tp_close_pct,
+            raw_payload=signal.raw_payload,
         )
         
         # Forward to order-gateway

@@ -11,9 +11,9 @@ client = TestClient(app)
 def test_valid_payload_forwarded(mock_client_class):
     """Test that a valid TradingView payload is forwarded to signal-orchestrator."""
     payload = {
+        "command": "ENTER_LONG",
         "symbol": "BTC-USDT",
-        "side": "buy",
-        "entry_type": "market",
+        "order_type": "market",
         "quantity": 0.001,
         "stop_loss": 28000.0,
         "take_profits": [
@@ -22,7 +22,9 @@ def test_valid_payload_forwarded(mock_client_class):
         ],
         "routing_profile": "default",
         "leverage": 10,
+        "margin_type": "ISOLATED",
         "strategy_name": "tv_test_strategy",
+        "timestamp": 1732387200000,
     }
     
     # Capture the JSON payload sent to signal-orchestrator
@@ -55,36 +57,40 @@ def test_valid_payload_forwarded(mock_client_class):
     call_args = mock_client.post.call_args
     assert call_args[0][0].endswith("/signals")
     
-    # Verify the forwarded JSON payload has a string timestamp
+    # Verify the forwarded JSON payload has expected fields
     assert "json" in captured_json
     forwarded_payload = captured_json["json"]
     assert "timestamp" in forwarded_payload
     assert isinstance(forwarded_payload["timestamp"], str)
     assert forwarded_payload["timestamp"]  # non-empty string
+    assert forwarded_payload["command"] == "ENTER_LONG"
+    assert forwarded_payload["margin_type"] == "ISOLATED"
+    assert forwarded_payload["tp_close_pct"] is None
+    assert forwarded_payload["raw_payload"]
 
 
-def test_invalid_side_results_in_400():
-    """Test that an invalid side value results in 400 error."""
+def test_invalid_command_results_in_400():
+    """Test that an invalid command value results in 400 error."""
     payload = {
+        "command": "DO_SOMETHING",
         "symbol": "BTC-USDT",
-        "side": "nonsense",
-        "entry_type": "market",
+        "order_type": "market",
         "quantity": 0.001,
     }
     
     response = client.post("/webhook/tradingview", json=payload)
     
     assert response.status_code == 400
-    assert "Invalid side" in response.json()["detail"]
+    assert "Unsupported command" in response.json()["detail"]
 
 
 @patch("services.tv_listener.src.main.httpx.AsyncClient")
 def test_symbol_normalization(mock_client_class):
     """Test that TradingView ticker symbols are normalized correctly."""
     payload = {
+        "command": "ENTER_LONG",
         "symbol": "BINANCE:LIGHTUSDT.P",
-        "side": "buy",
-        "entry_type": "market",
+        "order_type": "market",
         "quantity": 0.001,
         "stop_loss": 28000.0,
         "take_profits": [],
@@ -122,7 +128,10 @@ def test_symbol_normalization(mock_client_class):
     forwarded_payload = captured_json["json"]
     assert forwarded_payload["symbol"] == "LIGHTUSDT"
     
-    # Verify the original symbol is preserved in raw_payload
+    # Verify the original symbol is preserved in raw_payload text
     assert "raw_payload" in forwarded_payload
-    assert forwarded_payload["raw_payload"]["symbol"] == "BINANCE:LIGHTUSDT.P"
+    import json
+
+    raw_data = json.loads(forwarded_payload["raw_payload"])
+    assert raw_data["symbol"] == "BINANCE:LIGHTUSDT.P"
 

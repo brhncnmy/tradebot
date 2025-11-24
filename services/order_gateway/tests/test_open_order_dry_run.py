@@ -22,7 +22,11 @@ def test_open_order_dry_run():
         "stop_loss": None,
         "take_profits": [],
         "client_order_id": None,
-        "meta": {}
+        "meta": {},
+        "command": "ENTER_LONG",
+        "margin_type": "ISOLATED",
+        "tp_close_pct": None,
+        "raw_payload": "{\"symbol\": \"BTC-USDT\"}"
     }
     
     response = client.post("/orders/open", json=payload)

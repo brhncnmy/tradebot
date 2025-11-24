@@ -2,6 +2,7 @@
 
 import pytest
 
+from common.models.tv_command import TvCommand
 from services.order_gateway.src.exchanges.bingx_client import _map_position_side
 
 
@@ -55,6 +56,11 @@ async def test_bingx_order_includes_position_side():
         side="long",
         entry_type="market",
         quantity=0.001,
+        command=TvCommand.ENTER_LONG,
+        take_profits=[],
+        stop_loss=None,
+        leverage=None,
+        meta={},
     )
     
     # Mock environment variables
@@ -98,6 +104,11 @@ async def test_bingx_order_includes_position_side():
         side="short",
         entry_type="market",
         quantity=0.001,
+        command=TvCommand.ENTER_SHORT,
+        take_profits=[],
+        stop_loss=None,
+        leverage=None,
+        meta={},
     )
     
     with patch.dict(os.environ, {"VST_API_KEY": "vst_key", "VST_SECRET_KEY": "vst_secret"}):

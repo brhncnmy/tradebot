@@ -7,6 +7,7 @@ import httpx
 import pytest
 
 from common.models.order_request import AccountRef, OpenOrderRequest
+from common.models.tv_command import TvCommand
 from common.utils.config import AccountConfig
 from services.order_gateway.src.exchanges.bingx_client import (
     build_signed_query,
@@ -79,6 +80,11 @@ async def test_bingx_place_order_test_mode():
         side="long",
         entry_type="market",
         quantity=0.001,
+        command=TvCommand.ENTER_LONG,
+        take_profits=[],
+        stop_loss=None,
+        leverage=None,
+        meta={},
     )
     
     # Mock environment variables
@@ -143,6 +149,11 @@ async def test_bingx_place_order_missing_credentials():
         side="long",
         entry_type="market",
         quantity=0.001,
+        command=TvCommand.ENTER_LONG,
+        take_profits=[],
+        stop_loss=None,
+        leverage=None,
+        meta={},
     )
     
     # Ensure env vars are not set
@@ -172,6 +183,11 @@ async def test_bingx_place_order_demo_mode():
         side="long",
         entry_type="market",
         quantity=0.001,
+        command=TvCommand.ENTER_LONG,
+        take_profits=[],
+        stop_loss=None,
+        leverage=None,
+        meta={},
     )
     
     # Mock environment variables

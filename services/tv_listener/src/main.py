@@ -3,10 +3,11 @@ from datetime import datetime
 from typing import List, Optional
 
 import httpx
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from common.models.normalized_signal import NormalizedSignal, TakeProfitLevel, Side
+from common.models.normalized_signal import NormalizedSignal, Side, TakeProfitLevel
+from common.models.tv_command import TvCommand
 from common.utils.logging import get_logger
 
 app = FastAPI(title="tv-listener")
@@ -21,16 +22,19 @@ class TradingViewTpLevel(BaseModel):
 
 class TradingViewWebhookPayload(BaseModel):
     """TradingView webhook payload model."""
+    command: str
     symbol: str
-    side: str  # "long", "short", "buy", "sell"
-    entry_type: str  # "market" or "limit"
+    order_type: Optional[str] = "market"
     entry_price: Optional[float] = None
-    quantity: float
+    quantity: Optional[float] = None
+    margin_type: Optional[str] = None
+    leverage: Optional[float] = None
+    tp_close_pct: Optional[float] = None
+    routing_profile: Optional[str] = None
+    strategy_name: Optional[str] = None
+    timestamp: Optional[int] = None
     stop_loss: Optional[float] = None
     take_profits: Optional[List[TradingViewTpLevel]] = None
-    routing_profile: Optional[str] = None
-    leverage: Optional[float] = None
-    strategy_name: Optional[str] = None
 
 
 def normalize_symbol(symbol: str) -> str:
@@ -62,7 +66,27 @@ def normalize_symbol(symbol: str) -> str:
     return s
 
 
-def map_tradingview_payload_to_normalized_signal(payload: TradingViewWebhookPayload) -> NormalizedSignal:
+def _map_command_to_side(command: TvCommand) -> Optional[Side]:
+    """Map TradingView command to a logical side when applicable."""
+    if command in (
+        TvCommand.ENTER_LONG,
+        TvCommand.EXIT_LONG_ALL,
+        TvCommand.EXIT_LONG_PARTIAL,
+    ):
+        return "long"
+    if command in (
+        TvCommand.ENTER_SHORT,
+        TvCommand.EXIT_SHORT_ALL,
+        TvCommand.EXIT_SHORT_PARTIAL,
+    ):
+        return "short"
+    return None
+
+
+def map_tradingview_payload_to_normalized_signal(
+    payload: TradingViewWebhookPayload,
+    raw_payload_text: str,
+) -> NormalizedSignal:
     """
     Map TradingView webhook payload to NormalizedSignal.
     
@@ -75,21 +99,18 @@ def map_tradingview_payload_to_normalized_signal(payload: TradingViewWebhookPayl
     Raises:
         ValueError: If required fields are invalid or missing
     """
-    # Normalize side
-    side_raw = payload.side.lower()
-    if side_raw in ("long", "buy"):
-        normalized_side: Side = "long"
-    elif side_raw in ("short", "sell"):
-        normalized_side = "short"
-    else:
-        raise ValueError(f"Invalid side: {payload.side}. Must be one of: long, short, buy, sell")
+    # Parse command enum
+    try:
+        command = TvCommand(payload.command.strip().upper())
+    except Exception as exc:  # ValueError or AttributeError
+        raise ValueError(f"Unsupported command: {payload.command}") from exc
     
-    # Normalize entry_type
-    normalized_entry_type = payload.entry_type.lower()
+    normalized_side = _map_command_to_side(command)
+    
+    # Normalize order type (falls back to market)
+    normalized_entry_type = (payload.order_type or "market").lower()
     if normalized_entry_type not in ("market", "limit"):
-        raise ValueError(f"Invalid entry_type: {payload.entry_type}. Must be 'market' or 'limit'")
-    
-    # Validate limit order requires entry_price
+        raise ValueError(f"Invalid order_type: {payload.order_type}. Must be 'market' or 'limit'")
     if normalized_entry_type == "limit" and payload.entry_price is None:
         raise ValueError("entry_price required for limit orders")
     
@@ -105,8 +126,22 @@ def map_tradingview_payload_to_normalized_signal(payload: TradingViewWebhookPayl
     # Normalize symbol (e.g. "BINANCE:LIGHTUSDT.P" -> "LIGHTUSDT")
     normalized_symbol = normalize_symbol(payload.symbol)
     
+    # Convert TradingView timestamp (ms) to datetime if provided
+    signal_timestamp = None
+    if payload.timestamp:
+        try:
+            signal_timestamp = datetime.utcfromtimestamp(payload.timestamp / 1000)
+        except Exception:
+            logger.warning("Invalid timestamp value from TradingView: %s", payload.timestamp)
+            signal_timestamp = datetime.utcnow()
+    
     # Build NormalizedSignal
+    # Basic field warnings (non-fatal)
+    if command in (TvCommand.ENTER_LONG, TvCommand.ENTER_SHORT) and payload.quantity is None:
+        logger.warning("TradingView payload missing quantity for command %s", command.value)
+    
     return NormalizedSignal(
+        command=command,
         source="tradingview",
         strategy_name=payload.strategy_name,
         symbol=normalized_symbol,
@@ -115,11 +150,13 @@ def map_tradingview_payload_to_normalized_signal(payload: TradingViewWebhookPayl
         entry_price=payload.entry_price,
         quantity=payload.quantity,
         leverage=payload.leverage,
+        margin_type=payload.margin_type,
+        tp_close_pct=payload.tp_close_pct,
         stop_loss=payload.stop_loss,
         take_profits=tp_list,
         routing_profile=routing_profile,
-        timestamp=datetime.utcnow(),
-        raw_payload=payload.model_dump()  # keep original symbol inside raw payload
+        timestamp=signal_timestamp or datetime.utcnow(),
+        raw_payload=raw_payload_text,
     )
 
 
@@ -133,10 +170,9 @@ async def health():
 async def example_tradingview_payload():
     """Return an example TradingView webhook payload for reference."""
     example = {
+        "command": "ENTER_LONG",
         "symbol": "BTC-USDT",
-        "side": "buy",
-        "entry_type": "market",
-        "entry_price": None,
+        "order_type": "market",
         "quantity": 0.001,
         "stop_loss": 28000.0,
         "take_profits": [
@@ -145,13 +181,16 @@ async def example_tradingview_payload():
         ],
         "routing_profile": "default",
         "leverage": 10,
+        "margin_type": "ISOLATED",
+        "tp_close_pct": None,
         "strategy_name": "tv_example_strategy",
+        "timestamp": 1732387200000,
     }
     return example
 
 
 @app.post("/webhook/tradingview")
-async def tradingview_webhook(payload: TradingViewWebhookPayload):
+async def tradingview_webhook(request: Request, payload: TradingViewWebhookPayload):
     """
     Receive TradingView webhook and forward to signal-orchestrator.
     
@@ -161,10 +200,11 @@ async def tradingview_webhook(payload: TradingViewWebhookPayload):
     Returns:
         Response with forwarding status
     """
-    logger.info(f"Received TradingView webhook: {payload.model_dump()}")
+    raw_body = (await request.body()).decode("utf-8", errors="replace")
+    logger.info("TradingView RAW payload: %s", raw_body)
     
     try:
-        signal = map_tradingview_payload_to_normalized_signal(payload)
+        signal = map_tradingview_payload_to_normalized_signal(payload, raw_body)
     except ValueError as err:
         logger.error(f"Failed to map payload: {err}")
         raise HTTPException(
@@ -172,7 +212,16 @@ async def tradingview_webhook(payload: TradingViewWebhookPayload):
             detail=str(err)
         )
     
-    logger.info(f"Mapped to normalized signal: {signal.model_dump(mode='json')}")
+    logger.info(
+        "TradingView NORMALIZED: command=%s symbol=%s quantity=%s margin_type=%s leverage=%s tp_close_pct=%s routing_profile=%s",
+        signal.command.value,
+        signal.symbol,
+        signal.quantity,
+        signal.margin_type,
+        signal.leverage,
+        signal.tp_close_pct,
+        signal.routing_profile,
+    )
     
     # Read env for signal orchestrator URL
     base_url = os.getenv("SIGNAL_ORCHESTRATOR_URL", "http://signal-orchestrator:8001")

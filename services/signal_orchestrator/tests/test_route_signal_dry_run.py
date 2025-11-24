@@ -29,6 +29,7 @@ class DummyResponse:
 def test_route_signal_dry_run(mock_client_class):
     """Test that a signal is routed to order-gateway in DRY_RUN mode."""
     payload = {
+        "command": "ENTER_LONG",
         "source": "tradingview",
         "strategy_name": "tv_test_strategy",
         "symbol": "BTC-USDT",
@@ -37,12 +38,14 @@ def test_route_signal_dry_run(mock_client_class):
         "entry_price": None,
         "quantity": 0.001,
         "leverage": 10,
+        "margin_type": "ISOLATED",
+        "tp_close_pct": None,
         "risk_per_trade_pct": None,
         "stop_loss": 28000.0,
         "take_profits": [],
         "routing_profile": "default",
         "timestamp": None,
-        "raw_payload": {},
+        "raw_payload": "{\"symbol\": \"BTC-USDT\"}",
     }
     
     # Create DummyResponse
@@ -73,3 +76,6 @@ def test_route_signal_dry_run(mock_client_class):
     mock_client.post.assert_called_once()
     call_args = mock_client.post.call_args
     assert call_args[0][0].endswith("/orders/open")
+    forwarded_json = call_args[1]["json"]
+    assert forwarded_json["command"] == "ENTER_LONG"
+    assert forwarded_json["margin_type"] == "ISOLATED"
