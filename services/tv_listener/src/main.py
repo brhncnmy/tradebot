@@ -21,10 +21,46 @@ class TradingViewTpLevel(BaseModel):
 
 
 class TradingViewWebhookPayload(BaseModel):
-    """TradingView webhook payload model."""
-    command: str
+    """
+    TradingView webhook payload model.
+    
+    Supports both legacy format (with 'side' and 'entry_type') and new command-based format.
+    
+    Expected TradingView alert payload:
+    {
+      "command": "ENTER",  // Optional, defaults to "ENTER" if omitted
+      "symbol": "{{ticker}}",
+      "side": "{{strategy.order.action}}",  // "buy" or "sell" (normalized to LONG/SHORT)
+      "entry_type": "market",  // or "order_type"
+      "entry_price": {{strategy.order.price}},
+      "quantity": {{strategy.order.contracts}},
+      "stop_loss": null,  // Optional, nullable
+      "take_profits": null,  // Optional, nullable
+      "routing_profile": "default",
+      "leverage": 10,
+      "strategy_name": "{{strategy.order.comment}}"
+    }
+    
+    Notes:
+    - 'command' defaults to "ENTER" if omitted (backward compatibility)
+    - 'side' accepts: "buy", "sell", "long", "short" (case-insensitive, normalized to LONG/SHORT)
+    - Both 'entry_type' and 'order_type' are accepted (prefers 'order_type')
+    - 'stop_loss' and 'take_profits' can be null
+    """
+    # Command field: optional, defaults to "ENTER" for backward compatibility
+    command: Optional[str] = Field(default="ENTER", description="TradingView command (defaults to ENTER)")
+    
+    # Symbol (required)
     symbol: str
-    order_type: Optional[str] = "market"
+    
+    # Side field: accepts buy/sell/long/short, normalized internally
+    side: Optional[str] = Field(None, description="Position side: buy/sell/long/short (normalized to LONG/SHORT)")
+    
+    # Order type: accept both 'entry_type' and 'order_type' for compatibility
+    order_type: Optional[str] = Field(default="market", description="Order type: market or limit")
+    entry_type: Optional[str] = Field(None, description="Legacy field: same as order_type")
+    
+    # Optional fields
     entry_price: Optional[float] = None
     quantity: Optional[float] = None
     margin_type: Optional[str] = None
@@ -33,8 +69,36 @@ class TradingViewWebhookPayload(BaseModel):
     routing_profile: Optional[str] = None
     strategy_name: Optional[str] = None
     timestamp: Optional[int] = None
-    stop_loss: Optional[float] = None
-    take_profits: Optional[List[TradingViewTpLevel]] = None
+    stop_loss: Optional[float] = Field(None, description="Stop loss price (nullable)")
+    take_profits: Optional[List[TradingViewTpLevel]] = Field(None, description="Take profit levels (nullable)")
+    
+    def normalize_side(self) -> Optional[str]:
+        """
+        Normalize side field to LONG or SHORT.
+        
+        Returns:
+            "LONG", "SHORT", or None if side is not provided
+        """
+        if not self.side:
+            return None
+        
+        side_upper = self.side.upper().strip()
+        
+        # Map buy/sell to LONG/SHORT
+        if side_upper in ("BUY", "LONG"):
+            return "LONG"
+        if side_upper in ("SELL", "SHORT"):
+            return "SHORT"
+        
+        # If already LONG/SHORT, return as-is
+        if side_upper in ("LONG", "SHORT"):
+            return side_upper
+        
+        raise ValueError(f"Invalid side value: {self.side}. Must be one of: buy, sell, long, short")
+    
+    def get_order_type(self) -> str:
+        """Get order type, preferring order_type over entry_type."""
+        return (self.order_type or self.entry_type or "market").lower()
 
 
 def normalize_symbol(symbol: str) -> str:
@@ -92,6 +156,7 @@ def map_tradingview_payload_to_normalized_signal(
     
     Args:
         payload: TradingViewWebhookPayload instance
+        raw_payload_text: Raw JSON body text
         
     Returns:
         NormalizedSignal instance
@@ -99,18 +164,40 @@ def map_tradingview_payload_to_normalized_signal(
     Raises:
         ValueError: If required fields are invalid or missing
     """
+    # Determine command: use provided command, or derive from side
+    command_str = (payload.command or "ENTER").strip().upper()
+    
+    # If side is provided but command is just "ENTER", derive ENTER_LONG/ENTER_SHORT from side
+    if command_str == "ENTER" and payload.side:
+        try:
+            normalized_side_str = payload.normalize_side()
+            if normalized_side_str == "LONG":
+                command_str = "ENTER_LONG"
+            elif normalized_side_str == "SHORT":
+                command_str = "ENTER_SHORT"
+        except ValueError as e:
+            raise ValueError(f"Invalid side for ENTER command: {e}") from e
+    
     # Parse command enum
     try:
-        command = TvCommand(payload.command.strip().upper())
+        command = TvCommand(command_str)
     except Exception as exc:  # ValueError or AttributeError
-        raise ValueError(f"Unsupported command: {payload.command}") from exc
+        raise ValueError(f"Unsupported command: {command_str}") from exc
     
+    # Get normalized side (from command or from side field)
     normalized_side = _map_command_to_side(command)
+    if normalized_side is None and payload.side:
+        # Fallback: normalize side field directly
+        try:
+            side_str = payload.normalize_side()
+            normalized_side = "long" if side_str == "LONG" else "short" if side_str == "SHORT" else None
+        except ValueError:
+            pass  # Will be handled by command mapping
     
-    # Normalize order type (falls back to market)
-    normalized_entry_type = (payload.order_type or "market").lower()
+    # Normalize order type (prefer order_type, fallback to entry_type)
+    normalized_entry_type = payload.get_order_type()
     if normalized_entry_type not in ("market", "limit"):
-        raise ValueError(f"Invalid order_type: {payload.order_type}. Must be 'market' or 'limit'")
+        raise ValueError(f"Invalid order_type: {normalized_entry_type}. Must be 'market' or 'limit'")
     if normalized_entry_type == "limit" and payload.entry_price is None:
         raise ValueError("entry_price required for limit orders")
     
@@ -213,14 +300,12 @@ async def tradingview_webhook(request: Request, payload: TradingViewWebhookPaylo
         )
     
     logger.info(
-        "TradingView NORMALIZED: command=%s symbol=%s quantity=%s margin_type=%s leverage=%s tp_close_pct=%s routing_profile=%s",
+        "TradingView NORMALIZED: command=%s symbol=%s side=%s entry_type=%s quantity=%s",
         signal.command.value,
         signal.symbol,
+        signal.side,
+        signal.entry_type,
         signal.quantity,
-        signal.margin_type,
-        signal.leverage,
-        signal.tp_close_pct,
-        signal.routing_profile,
     )
     
     # Read env for signal orchestrator URL

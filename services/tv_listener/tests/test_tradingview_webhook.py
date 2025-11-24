@@ -135,3 +135,123 @@ def test_symbol_normalization(mock_client_class):
     raw_data = json.loads(forwarded_payload["raw_payload"])
     assert raw_data["symbol"] == "BINANCE:LIGHTUSDT.P"
 
+
+@patch("services.tv_listener.src.main.httpx.AsyncClient")
+def test_legacy_payload_with_side_buy(mock_client_class):
+    """Test that legacy payload with side='buy' (no command) is accepted and normalized."""
+    payload = {
+        "symbol": "BTC-USDT",
+        "side": "buy",  # Legacy format
+        "entry_type": "market",  # Legacy field name
+        "quantity": 0.001,
+        "stop_loss": None,  # Nullable
+        "take_profits": None,  # Nullable
+        "routing_profile": "default",
+        "leverage": 10,
+        "strategy_name": "test_strategy",
+    }
+    
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"ok": True}
+    
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+    
+    response = client.post("/webhook/tradingview", json=payload)
+    
+    assert response.status_code == 200
+    # Verify command was derived from side
+    mock_client.post.assert_called_once()
+    call_args = mock_client.post.call_args
+    forwarded_json = call_args[1]["json"]
+    assert forwarded_json["command"] == "ENTER_LONG"  # Derived from side="buy"
+
+
+@patch("services.tv_listener.src.main.httpx.AsyncClient")
+def test_legacy_payload_with_side_sell(mock_client_class):
+    """Test that legacy payload with side='sell' is normalized to SHORT."""
+    payload = {
+        "symbol": "BTC-USDT",
+        "side": "sell",
+        "entry_type": "market",
+        "quantity": 0.001,
+    }
+    
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"ok": True}
+    
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+    
+    response = client.post("/webhook/tradingview", json=payload)
+    
+    assert response.status_code == 200
+    call_args = mock_client.post.call_args
+    forwarded_json = call_args[1]["json"]
+    assert forwarded_json["command"] == "ENTER_SHORT"  # Derived from side="sell"
+
+
+@patch("services.tv_listener.src.main.httpx.AsyncClient")
+def test_payload_with_null_stop_loss_and_take_profits(mock_client_class):
+    """Test that null stop_loss and take_profits are accepted."""
+    payload = {
+        "symbol": "BTC-USDT",
+        "side": "buy",
+        "entry_type": "market",
+        "quantity": 0.001,
+        "stop_loss": None,
+        "take_profits": None,
+    }
+    
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"ok": True}
+    
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+    
+    response = client.post("/webhook/tradingview", json=payload)
+    
+    assert response.status_code == 200  # Should not return 422
+
+
+@patch("services.tv_listener.src.main.httpx.AsyncClient")
+def test_command_defaults_to_enter_when_omitted(mock_client_class):
+    """Test that command defaults to ENTER when omitted."""
+    payload = {
+        "symbol": "BTC-USDT",
+        "side": "buy",
+        "entry_type": "market",
+        "quantity": 0.001,
+    }
+    # Note: no "command" field
+    
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"ok": True}
+    
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value = mock_client
+    
+    response = client.post("/webhook/tradingview", json=payload)
+    
+    assert response.status_code == 200
+    call_args = mock_client.post.call_args
+    forwarded_json = call_args[1]["json"]
+    # Command should be derived as ENTER_LONG from side="buy"
+    assert forwarded_json["command"] == "ENTER_LONG"
+
