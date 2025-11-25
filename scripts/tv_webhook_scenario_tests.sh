@@ -20,7 +20,7 @@ run_scenario() {
     tp_json="${tp_pct}"
   fi
 
-  read -r -d '' payload <<JSON
+  payload=$(cat <<JSON
 {
   "command": "${command}",
   "symbol": "${SYMBOL}",
@@ -37,6 +37,7 @@ run_scenario() {
   "tp_close_pct": ${tp_json}
 }
 JSON
+)
 
   echo "=== ${name} ==="
   echo "Payload:"
