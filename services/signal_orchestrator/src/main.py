@@ -38,7 +38,6 @@ async def handle_signal(signal: NormalizedSignal):
     
     # Determine routing profile
     profile_name = signal.routing_profile or "default"
-    logger.info(f"Using routing profile: {profile_name}")
     
     try:
         accounts = get_routing_profile(profile_name)
@@ -49,8 +48,30 @@ async def handle_signal(signal: NormalizedSignal):
             detail=str(e)
         )
     
-    logger.info(f"Routed to {len(accounts)} account(s)")
-    logger.info(f"Orchestrator: routing command={signal.command.value} symbol={signal.symbol} qty={signal.quantity}")
+    # Enhanced routing logging
+    account_ids = [acc.account_id for acc in accounts]
+    logger.info(
+        "Routing signal: routing_profile=%s accounts=%s command=%s symbol=%s",
+        profile_name,
+        account_ids,
+        signal.command.value,
+        signal.symbol,
+    )
+    
+    if len(accounts) == 0:
+        logger.warning(
+            "No available accounts for routing_profile=%s command=%s symbol=%s - signal will be dropped",
+            profile_name,
+            signal.command.value,
+            signal.symbol,
+        )
+        return {
+            "status": "dropped",
+            "routing_profile": profile_name,
+            "reason": "no_available_accounts",
+            "routed_accounts": 0,
+            "results": [],
+        }
     
     # Validate minimal requirements
     if signal.command in (TvCommand.ENTER_LONG, TvCommand.ENTER_SHORT):

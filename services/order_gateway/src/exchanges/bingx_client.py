@@ -202,9 +202,9 @@ async def bingx_place_order(
     
     # Log request (without secrets)
     logger.info(
-        "BingX request: mode=%s, account=%s, command=%s, symbol=%s, side=%s, positionSide=%s, quantity=%s, reduceOnly_applied=%s, endpoint=%s",
-        account_config.mode,
+        "BingX order request: account=%s mode=%s command=%s symbol=%s side=%s positionSide=%s quantity=%s reduceOnly_applied=%s endpoint=%s",
         account_config.account_id,
+        account_config.mode,
         order.command.value,
         symbol,
         side,

@@ -67,6 +67,8 @@ def test_valid_payload_forwarded(mock_client_class):
     assert forwarded_payload["margin_type"] == "ISOLATED"
     assert forwarded_payload["tp_close_pct"] is None
     assert forwarded_payload["raw_payload"]
+    # Verify routing_profile is passed through
+    assert forwarded_payload["routing_profile"] == "default"
 
 
 def test_invalid_command_results_in_400():
@@ -318,6 +320,78 @@ def test_short_exit_with_code(mock_client_class):
     assert forwarded_json["command"] == "EXIT_SHORT"
     assert forwarded_json["symbol"] == "NTRNUSDT"  # Normalized
     assert forwarded_json["side"] == "short"
+
+
+@patch("services.tv_listener.src.main.httpx.AsyncClient")
+def test_routing_profile_passed_through(mock_client_class):
+    """Test that routing_profile from payload is passed through to signal-orchestrator."""
+    payload = {
+        "command": "ENTER_LONG",
+        "symbol": "BTCUSDT",
+        "side": "buy",
+        "entry_type": "market",
+        "quantity": 0.001,
+        "routing_profile": "demo_both",
+    }
+    
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"ok": True}
+    
+    captured_json = {}
+    
+    async def capture_post(url, json=None, timeout=None, **kwargs):
+        captured_json["json"] = json
+        return mock_response
+    
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post = AsyncMock(side_effect=capture_post)
+    mock_client_class.return_value = mock_client
+    
+    response = client.post("/webhook/tradingview", json=payload)
+    
+    assert response.status_code == 200
+    assert "json" in captured_json
+    forwarded_payload = captured_json["json"]
+    assert forwarded_payload["routing_profile"] == "demo_both"
+
+
+@patch("services.tv_listener.src.main.httpx.AsyncClient")
+def test_routing_profile_defaults_when_omitted(mock_client_class):
+    """Test that routing_profile defaults to 'default' when omitted from payload."""
+    payload = {
+        "command": "ENTER_LONG",
+        "symbol": "BTCUSDT",
+        "side": "buy",
+        "entry_type": "market",
+        "quantity": 0.001,
+        # Note: no routing_profile field
+    }
+    
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"ok": True}
+    
+    captured_json = {}
+    
+    async def capture_post(url, json=None, timeout=None, **kwargs):
+        captured_json["json"] = json
+        return mock_response
+    
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post = AsyncMock(side_effect=capture_post)
+    mock_client_class.return_value = mock_client
+    
+    response = client.post("/webhook/tradingview", json=payload)
+    
+    assert response.status_code == 200
+    assert "json" in captured_json
+    forwarded_payload = captured_json["json"]
+    assert forwarded_payload["routing_profile"] == "default"
 
 
 @patch("services.tv_listener.src.main.httpx.AsyncClient")

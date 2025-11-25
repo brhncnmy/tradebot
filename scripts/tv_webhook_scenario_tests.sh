@@ -4,6 +4,7 @@ set -euo pipefail
 BASE_URL="${BASE_URL:-http://localhost:8000}"
 ENDPOINT="${BASE_URL%/}/webhook/tradingview"
 SYMBOL="${SYMBOL:-HBARUSDT.P}"
+ROUTING_PROFILE="${ROUTING_PROFILE:-demo_primary_only}"
 
 declare -A SCENARIO_STATUS
 
@@ -30,7 +31,7 @@ run_scenario() {
   "quantity": ${quantity},
   "stop_loss": null,
   "take_profits": null,
-  "routing_profile": "default",
+  "routing_profile": "${ROUTING_PROFILE}",
   "leverage": 10,
   "strategy_name": "TV Scenario Test",
   "code": "${code_field}",
@@ -72,6 +73,11 @@ run_scenario "S6: EXIT_SHORT full close" "EXIT" "short exit" "buy" 45
 
 echo "=== Scenario summary ==="
 for scenario in "${!SCENARIO_STATUS[@]}"; do
-  printf "%s -> %s\n" "${scenario}" "${SCENARIO_STATUS[${scenario}]}"
+  status="${SCENARIO_STATUS[${scenario}]}"
+  if [[ "${status}" == "200" ]]; then
+    printf "%s OK - routing_profile=%s\n" "${scenario}" "${ROUTING_PROFILE}"
+  else
+    printf "%s -> %s (routing_profile=%s)\n" "${scenario}" "${status}" "${ROUTING_PROFILE}"
+  fi
 done
 
