@@ -270,9 +270,7 @@ async def handle_bingx_order(account_cfg, request: OpenOrderRequest):
     
     # Test, demo, or live mode: make API call
     # Read credentials to log status (without exposing secrets)
-    import os
-    api_key = os.getenv(account_cfg.api_key_env or "")
-    secret_key = os.getenv(account_cfg.secret_key_env or "")
+    api_key, secret_key = account_cfg.get_credentials()
     
     logger.info(
         "BingX account resolved: id=%s, exchange=%s, mode=%s, has_api_key=%s, has_secret=%s",
@@ -308,15 +306,30 @@ async def handle_bingx_order(account_cfg, request: OpenOrderRequest):
             status_code=400,
             detail=str(e)
         )
+    except RuntimeError as e:
+        # BingX API errors (e.g., signature verification failed, invalid API key)
+        error_msg = str(e)
+        logger.error(
+            f"BingX API error: mode={mode}, account_id={account_cfg.account_id}, "
+            f"symbol={request.symbol}, side={request.side}, quantity={request.quantity}, "
+            f"error={error_msg}"
+        )
+        # Return 400 for API-level errors (bad request, authentication issues)
+        # This is more appropriate than 502 (bad gateway) for API errors
+        raise HTTPException(
+            status_code=400,
+            detail=f"BingX API error: {error_msg}"
+        )
     except Exception as e:
+        # Network errors, connection issues, etc. - these are true gateway errors
         logger.exception(
-            f"BingX order failed: mode={mode}, account_id={account_cfg.account_id}, "
+            f"BingX order failed (network/system error): mode={mode}, account_id={account_cfg.account_id}, "
             f"symbol={request.symbol}, side={request.side}, quantity={request.quantity}, "
             f"error={e}"
         )
         raise HTTPException(
             status_code=502,
-            detail="Failed to place order on BingX"
+            detail=f"Failed to place order on BingX: {str(e)}"
         )
 
 

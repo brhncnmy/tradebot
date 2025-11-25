@@ -245,7 +245,7 @@ async def bingx_place_order(
         if len(body_str) > 300:
             body_str = body_str[:300] + "... (truncated)"
         
-        if resp.is_success:
+        if resp.status_code < 400:
             logger.info(
                 "BingX response: account=%s exchange=bingx mode=%s command=%s symbol=%s side=%s positionSide=%s status=%s body=%s",
                 account_config.account_id,

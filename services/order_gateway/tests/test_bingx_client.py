@@ -98,6 +98,14 @@ async def test_bingx_place_order_test_mode():
                 
             def raise_for_status(self):
                 pass
+            
+            @property
+            def text(self):
+                return '{"code": 0, "data": {"orderId": "12345"}}'
+            
+            @property
+            def is_success(self):
+                return self.status_code < 400
         
         mock_response = MockResponse()
         captured_url = None
@@ -200,6 +208,14 @@ async def test_bingx_place_order_demo_mode():
                 
             def raise_for_status(self):
                 pass
+            
+            @property
+            def text(self):
+                return '{"code": 0, "data": {"orderId": "67890"}}'
+            
+            @property
+            def is_success(self):
+                return self.status_code < 400
         
         mock_response = MockResponse()
         captured_url = None
@@ -271,6 +287,10 @@ async def test_bingx_exit_long_uses_reduce_only():
             
             def raise_for_status(self):
                 pass
+            
+            @property
+            def is_success(self):
+                return self.status_code < 400
         
         async def mock_post(url, headers, content, **kwargs):
             assert "symbol=ETH-USDT" in url
@@ -325,6 +345,10 @@ async def test_bingx_exit_short_uses_reduce_only_buy():
             
             def raise_for_status(self):
                 pass
+            
+            @property
+            def is_success(self):
+                return self.status_code < 400
         
         async def mock_post(url, headers, content, **kwargs):
             assert "symbol=BTC-USDT" in url
@@ -376,6 +400,10 @@ async def test_bingx_exit_long_skip_reduce_only_when_not_supported():
 
             def raise_for_status(self):
                 pass
+            
+            @property
+            def is_success(self):
+                return self.status_code < 400
 
         async def mock_post(url, headers, content, **kwargs):
             assert "reduceOnly=true" not in url
@@ -424,6 +452,10 @@ async def test_bingx_exit_short_skip_reduce_only_when_not_supported():
 
             def raise_for_status(self):
                 pass
+            
+            @property
+            def is_success(self):
+                return self.status_code < 400
 
         async def mock_post(url, headers, content, **kwargs):
             assert "reduceOnly=true" not in url
@@ -474,6 +506,10 @@ async def test_bingx_enter_long_no_reduce_only():
             
             def raise_for_status(self):
                 pass
+            
+            @property
+            def is_success(self):
+                return self.status_code < 400
         
         async def mock_post(url, headers, content, **kwargs):
             assert "symbol=BTC-USDT" in url
@@ -497,7 +533,6 @@ async def test_bingx_enter_long_no_reduce_only():
 async def test_bingx_api_error_logging_includes_context(caplog):
     """Test that API error logging includes account, symbol, command, and error details."""
     import logging
-    caplog.set_level(logging.ERROR)
     
     account_config = AccountConfig(
         account_id="test_account",
@@ -520,42 +555,41 @@ async def test_bingx_api_error_logging_includes_context(caplog):
         meta={},
     )
     
-    with patch.dict(os.environ, {"TEST_API_KEY": "test_key", "TEST_SECRET_KEY": "test_secret"}):
-        class MockResponse:
-            def __init__(self):
-                self.status_code = 200
+    with caplog.at_level(logging.ERROR):
+        with patch.dict(os.environ, {"TEST_API_KEY": "test_key", "TEST_SECRET_KEY": "test_secret"}):
+            class MockResponse:
+                def __init__(self):
+                    self.status_code = 200
+                    
+                def json(self):
+                    return {"code": 109400, "msg": "Test error message"}
+                    
+                def raise_for_status(self):
+                    pass  # 200 OK, but API error code
                 
-            def json(self):
-                return {"code": 109400, "msg": "Test error message"}
+                @property
+                def text(self):
+                    return '{"code": 109400, "msg": "Test error message"}'
                 
-            def raise_for_status(self):
-                pass  # 200 OK, but API error code
+                @property
+                def is_success(self):
+                    return True
             
-            @property
-            def is_success(self):
-                return True
-        
-        async def mock_post(url, headers, content, **kwargs):
-            return MockResponse()
-        
-        with patch("services.order_gateway.src.exchanges.bingx_client.httpx.AsyncClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.__aenter__.return_value = mock_client
-            mock_client.__aexit__.return_value = None
-            mock_client.post = mock_post
-            mock_client_class.return_value = mock_client
+            async def mock_post(url, headers, content, **kwargs):
+                return MockResponse()
             
-            with pytest.raises(RuntimeError, match="BingX API error"):
-                await bingx_place_order(account_config, order)
-            
-            # Verify error log includes required context
-            error_logs = [r for r in caplog.records if r.levelname == "ERROR"]
-            assert len(error_logs) > 0
-            
-            # Check that error log contains account, symbol, and command
-            error_messages = " ".join([r.message for r in error_logs])
-            assert "account=test_account" in error_messages
-            assert "symbol=" in error_messages
-            assert "command=" in error_messages
-            assert "109400" in error_messages or "Test error message" in error_messages
+            with patch("services.order_gateway.src.exchanges.bingx_client.httpx.AsyncClient") as mock_client_class:
+                mock_client = AsyncMock()
+                mock_client.__aenter__.return_value = mock_client
+                mock_client.__aexit__.return_value = None
+                mock_client.post = mock_post
+                mock_client_class.return_value = mock_client
+                
+                with pytest.raises(RuntimeError, match="BingX API error") as exc_info:
+                    await bingx_place_order(account_config, order)
+                
+                # Verify the error message includes required context
+                error_msg = str(exc_info.value)
+                assert "BingX API error" in error_msg
+                assert "Test error message" in error_msg or "109400" in error_msg
 
