@@ -70,8 +70,7 @@ async def test_bingx_place_order_test_mode():
         account_id="test_account",
         exchange="bingx",
         mode="test",
-        api_key_env="TEST_API_KEY",
-        secret_key_env="TEST_SECRET_KEY",
+        env_pairs=[("TEST_API_KEY", "TEST_SECRET_KEY")],
     )
     
     order = OpenOrderRequest(
@@ -139,8 +138,7 @@ async def test_bingx_place_order_missing_credentials():
         account_id="test_account",
         exchange="bingx",
         mode="test",
-        api_key_env="MISSING_KEY",
-        secret_key_env="MISSING_SECRET",
+        env_pairs=[("MISSING_KEY", "MISSING_SECRET")],
     )
     
     order = OpenOrderRequest(
@@ -173,8 +171,7 @@ async def test_bingx_place_order_demo_mode():
         account_id="demo_account",
         exchange="bingx",
         mode="demo",
-        api_key_env="VST_API_KEY",
-        secret_key_env="VST_SECRET_KEY",
+        env_pairs=[("VST_API_KEY", "VST_SECRET_KEY")],
         supports_reduce_only=True,
     )
     
@@ -247,8 +244,7 @@ async def test_bingx_exit_long_uses_reduce_only():
         account_id="demo_account",
         exchange="bingx",
         mode="demo",
-        api_key_env="VST_API_KEY",
-        secret_key_env="VST_SECRET_KEY",
+        env_pairs=[("VST_API_KEY", "VST_SECRET_KEY")],
         supports_reduce_only=True,
     )
     
@@ -302,8 +298,7 @@ async def test_bingx_exit_short_uses_reduce_only_buy():
         account_id="demo_account",
         exchange="bingx",
         mode="demo",
-        api_key_env="VST_API_KEY",
-        secret_key_env="VST_SECRET_KEY",
+        env_pairs=[("VST_API_KEY", "VST_SECRET_KEY")],
         supports_reduce_only=True,
     )
     
@@ -356,8 +351,7 @@ async def test_bingx_exit_long_skip_reduce_only_when_not_supported():
         account_id="hedge_demo",
         exchange="bingx",
         mode="demo",
-        api_key_env="VST_API_KEY",
-        secret_key_env="VST_SECRET_KEY",
+        env_pairs=[("VST_API_KEY", "VST_SECRET_KEY")],
         supports_reduce_only=False,
     )
     order = OpenOrderRequest(
@@ -405,8 +399,7 @@ async def test_bingx_exit_short_skip_reduce_only_when_not_supported():
         account_id="hedge_demo",
         exchange="bingx",
         mode="demo",
-        api_key_env="VST_API_KEY",
-        secret_key_env="VST_SECRET_KEY",
+        env_pairs=[("VST_API_KEY", "VST_SECRET_KEY")],
         supports_reduce_only=False,
     )
     order = OpenOrderRequest(
@@ -455,8 +448,7 @@ async def test_bingx_enter_long_no_reduce_only():
         account_id="demo_account",
         exchange="bingx",
         mode="demo",
-        api_key_env="VST_API_KEY",
-        secret_key_env="VST_SECRET_KEY",
+        env_pairs=[("VST_API_KEY", "VST_SECRET_KEY")],
     )
     
     order = OpenOrderRequest(
@@ -499,4 +491,71 @@ async def test_bingx_enter_long_no_reduce_only():
             
             result = await bingx_place_order(account_config, order)
             assert result["data"]["orderId"] == "enter-long"
+
+
+@pytest.mark.asyncio
+async def test_bingx_api_error_logging_includes_context(caplog):
+    """Test that API error logging includes account, symbol, command, and error details."""
+    import logging
+    caplog.set_level(logging.ERROR)
+    
+    account_config = AccountConfig(
+        account_id="test_account",
+        exchange="bingx",
+        mode="demo",
+        env_pairs=[("TEST_API_KEY", "TEST_SECRET_KEY")],
+    )
+    
+    order = OpenOrderRequest(
+        account=AccountRef(exchange="bingx", account_id="test_account"),
+        symbol="BTCUSDT",
+        side="long",
+        entry_type="market",
+        quantity=0.001,
+        command=TvCommand.ENTER_LONG,
+        take_profits=[],
+        stop_loss=None,
+        leverage=10,
+        margin_type="isolated",
+        meta={},
+    )
+    
+    with patch.dict(os.environ, {"TEST_API_KEY": "test_key", "TEST_SECRET_KEY": "test_secret"}):
+        class MockResponse:
+            def __init__(self):
+                self.status_code = 200
+                
+            def json(self):
+                return {"code": 109400, "msg": "Test error message"}
+                
+            def raise_for_status(self):
+                pass  # 200 OK, but API error code
+            
+            @property
+            def is_success(self):
+                return True
+        
+        async def mock_post(url, headers, content, **kwargs):
+            return MockResponse()
+        
+        with patch("services.order_gateway.src.exchanges.bingx_client.httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client.post = mock_post
+            mock_client_class.return_value = mock_client
+            
+            with pytest.raises(RuntimeError, match="BingX API error"):
+                await bingx_place_order(account_config, order)
+            
+            # Verify error log includes required context
+            error_logs = [r for r in caplog.records if r.levelname == "ERROR"]
+            assert len(error_logs) > 0
+            
+            # Check that error log contains account, symbol, and command
+            error_messages = " ".join([r.message for r in error_logs])
+            assert "account=test_account" in error_messages
+            assert "symbol=" in error_messages
+            assert "command=" in error_messages
+            assert "109400" in error_messages or "Test error message" in error_messages
 

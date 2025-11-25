@@ -129,9 +129,8 @@ async def bingx_place_order(
     """
     import os
     
-    # Get credentials from environment
-    api_key = os.getenv(account_config.api_key_env or "")
-    secret_key = os.getenv(account_config.secret_key_env or "")
+    # Get credentials from environment (supports numeric scheme with legacy fallback)
+    api_key, secret_key = account_config.get_credentials()
     source_key = os.getenv(account_config.source_key_env) if account_config.source_key_env else None
     
     if not api_key or not secret_key:
@@ -216,32 +215,85 @@ async def bingx_place_order(
     
     # Make request
     async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.post(url, headers=headers, content=b"")
+        try:
+            resp = await client.post(url, headers=headers, content=b"")
+        except httpx.HTTPError as e:
+            # Log HTTP-level errors with full context
+            logger.error(
+                "BingX HTTP error: account=%s exchange=bingx command=%s symbol=%s side=%s positionSide=%s quantity=%s leverage=%s margin_type=%s error=%s",
+                account_config.account_id,
+                order.command.value,
+                symbol,
+                side,
+                position_side,
+                quantity,
+                order.leverage or "N/A",
+                order.margin_type or "N/A",
+                str(e),
+            )
+            raise
         
-        # Raise for non-2xx so we can catch and log at the handler level
-        resp.raise_for_status()
+        # Parse JSON response (even for error status codes to get BingX error details)
+        try:
+            data = resp.json()
+        except Exception:
+            # If response is not JSON, use raw text
+            data = {"raw_response": resp.text[:500]}
         
-        # Parse JSON response
-        data = resp.json()
-        
-        # Log response (truncate body to avoid logging secrets)
-        # Remove signature and sensitive query params from body representation
+        # Log response with full context
         body_str = str(data)
         if len(body_str) > 300:
             body_str = body_str[:300] + "... (truncated)"
-        logger.info(
-            "BingX response: mode=%s, account=%s, status=%s, body=%s",
-            account_config.mode,
-            account_config.account_id,
-            resp.status_code,
-            body_str,
-        )
         
-        # Check for API error codes
+        if resp.is_success:
+            logger.info(
+                "BingX response: account=%s exchange=bingx mode=%s command=%s symbol=%s side=%s positionSide=%s status=%s body=%s",
+                account_config.account_id,
+                account_config.mode,
+                order.command.value,
+                symbol,
+                side,
+                position_side,
+                resp.status_code,
+                body_str,
+            )
+        else:
+            # Log error responses with full context
+            error_code = data.get("code", "N/A")
+            error_msg = data.get("msg") or data.get("message", "Unknown error")
+            logger.error(
+                "BingX error response: account=%s exchange=bingx command=%s symbol=%s side=%s positionSide=%s quantity=%s leverage=%s margin_type=%s http_status=%s api_code=%s api_msg=%s body=%s",
+                account_config.account_id,
+                order.command.value,
+                symbol,
+                side,
+                position_side,
+                quantity,
+                order.leverage or "N/A",
+                order.margin_type or "N/A",
+                resp.status_code,
+                error_code,
+                error_msg,
+                body_str,
+            )
+        
+        # Raise for non-2xx HTTP status codes
+        resp.raise_for_status()
+        
+        # Check for API error codes (BingX returns 200 OK even for API errors)
         code = data.get("code")
         if code not in (0, "0", None):
             error_msg = data.get("msg") or data.get("message", "Unknown error")
-            logger.error(f"BingX API error: code={code}, message={error_msg}")
+            logger.error(
+                "BingX API error: account=%s exchange=bingx command=%s symbol=%s side=%s positionSide=%s api_code=%s api_msg=%s",
+                account_config.account_id,
+                order.command.value,
+                symbol,
+                side,
+                position_side,
+                code,
+                error_msg,
+            )
             raise RuntimeError(f"BingX API error: {error_msg} (code: {code})")
         
         return data

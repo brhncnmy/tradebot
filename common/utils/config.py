@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Literal, Optional
+from typing import Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel
 
@@ -16,6 +16,24 @@ def _get_logger():
     return _logger
 
 
+def get_first_non_empty_pair(env_pairs: List[Tuple[str, str]]) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Get the first non-empty API key/secret pair from a list of candidate env var pairs.
+    
+    Args:
+        env_pairs: List of (api_key_env, secret_key_env) tuples to try in order
+        
+    Returns:
+        Tuple of (api_key, secret_key) or (None, None) if no pair is found
+    """
+    for api_key_env, secret_key_env in env_pairs:
+        api_key = os.getenv(api_key_env)
+        secret_key = os.getenv(secret_key_env)
+        if api_key and secret_key:
+            return api_key, secret_key
+    return None, None
+
+
 class AccountConfig(BaseModel):
     """Trading account configuration."""
     account_id: str
@@ -25,6 +43,24 @@ class AccountConfig(BaseModel):
     secret_key_env: Optional[str] = None
     source_key_env: Optional[str] = None
     supports_reduce_only: bool = True
+    # Optional: list of (api_key_env, secret_key_env) pairs to try in order
+    # If provided, this takes precedence over api_key_env/secret_key_env
+    env_pairs: Optional[List[Tuple[str, str]]] = None
+    
+    def get_credentials(self) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Get API credentials for this account, trying numeric scheme first, then legacy.
+        
+        Returns:
+            Tuple of (api_key, secret_key) or (None, None) if not found
+        """
+        if self.env_pairs:
+            return get_first_non_empty_pair(self.env_pairs)
+        if self.api_key_env and self.secret_key_env:
+            api_key = os.getenv(self.api_key_env)
+            secret_key = os.getenv(self.secret_key_env)
+            return api_key, secret_key
+        return None, None
 
 
 # In-memory account registry
@@ -33,16 +69,22 @@ _accounts: Dict[str, AccountConfig] = {
         account_id="bingx_primary",
         exchange="bingx",
         mode="test",  # Test mode: uses /order/test endpoint (no real orders)
-        api_key_env="BINGX_API_KEY",
-        secret_key_env="BINGX_API_SECRET",
+        # Try numeric scheme first (BINGX_3_*), then fall back to legacy (BINGX_*)
+        env_pairs=[
+            ("BINGX_3_API_KEY", "BINGX_3_API_SECRET"),
+            ("BINGX_API_KEY", "BINGX_API_SECRET"),
+        ],
         source_key_env=None,  # Optional, not in .env by default
     ),
     "bingx_vst_demo": AccountConfig(
         account_id="bingx_vst_demo",
         exchange="bingx",
         mode="demo",  # Demo mode: uses VST host with virtual USDT
-        api_key_env="BINGX_VST_API_KEY",
-        secret_key_env="BINGX_VST_API_SECRET",
+        # Try numeric scheme first (BINGX_1_*), then fall back to legacy (BINGX_VST_*)
+        env_pairs=[
+            ("BINGX_1_API_KEY", "BINGX_1_API_SECRET"),
+            ("BINGX_VST_API_KEY", "BINGX_VST_API_SECRET"),
+        ],
         source_key_env=None,  # Optional, not in .env by default
         supports_reduce_only=False,
     ),
@@ -50,8 +92,11 @@ _accounts: Dict[str, AccountConfig] = {
         account_id="bingx_vst_demo_secondary",
         exchange="bingx",
         mode="demo",  # Demo mode: uses VST host with virtual USDT
-        api_key_env="BINGX_SECOND_API_KEY",
-        secret_key_env="BINGX_SECOND_SECRET_KEY",
+        # Try numeric scheme first (BINGX_2_*), then fall back to legacy (BINGX_SECOND_*)
+        env_pairs=[
+            ("BINGX_2_API_KEY", "BINGX_2_API_SECRET"),
+            ("BINGX_SECOND_API_KEY", "BINGX_SECOND_SECRET_KEY"),
+        ],
         source_key_env=None,  # Optional, not in .env by default
         supports_reduce_only=False,
     )
@@ -62,10 +107,7 @@ def _is_account_available(account_id: str) -> bool:
     if account_id not in _accounts:
         return False
     account = _accounts[account_id]
-    if not account.api_key_env or not account.secret_key_env:
-        return False
-    api_key = os.getenv(account.api_key_env)
-    secret_key = os.getenv(account.secret_key_env)
+    api_key, secret_key = account.get_credentials()
     return bool(api_key and secret_key)
 
 

@@ -39,6 +39,8 @@ services:
       - "8001:8001"
     environment:
       - ORDER_GATEWAY_URL=http://order-gateway:8002
+    env_file:
+      - .env.bingx
     depends_on:
       - order-gateway
     networks:
