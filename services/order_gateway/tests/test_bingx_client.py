@@ -16,13 +16,6 @@ from services.order_gateway.src.exchanges.bingx_client import (
 )
 
 
-@pytest.fixture
-def anyio_backend():
-    """Restrict anyio tests to asyncio backend only."""
-
-    return "asyncio"
-
-
 def test_get_bingx_env_test():
     """Test test mode environment."""
     env = get_bingx_env("test")
@@ -70,7 +63,7 @@ def test_build_signed_query():
     assert len(sig_part) == 64  # SHA256 hex digest length
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.asyncio
 async def test_bingx_place_order_test_mode():
     """Test BingX order placement in test mode."""
     account_config = AccountConfig(
@@ -139,7 +132,7 @@ async def test_bingx_place_order_test_mode():
             assert result["data"]["orderId"] == "12345"
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.asyncio
 async def test_bingx_place_order_missing_credentials():
     """Test that missing credentials raise ValueError."""
     account_config = AccountConfig(
@@ -173,7 +166,7 @@ async def test_bingx_place_order_missing_credentials():
             await bingx_place_order(account_config, order)
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.asyncio
 async def test_bingx_place_order_demo_mode():
     """Test BingX order placement in demo mode (VST host)."""
     account_config = AccountConfig(
@@ -245,7 +238,7 @@ async def test_bingx_place_order_demo_mode():
             assert "open-api-vst.bingx.com" in captured_url
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.asyncio
 async def test_bingx_exit_long_uses_reduce_only():
     """EXIT_LONG should submit SELL with LONG positionSide and reduceOnly flag."""
     
@@ -283,9 +276,9 @@ async def test_bingx_exit_long_uses_reduce_only():
         
         async def mock_post(url, headers, content, **kwargs):
             assert "symbol=ETH-USDT" in url
-            assert "side=SELL" in url
+            assert "side=SELL" in url  # EXIT_LONG should be SELL
             assert "positionSide=LONG" in url
-            assert "reduceOnly=true" in url
+            assert "reduceOnly=true" in url  # Critical: must have reduceOnly
             return MockResponse()
         
         with patch("services.order_gateway.src.exchanges.bingx_client.httpx.AsyncClient") as mock_client_class:
@@ -299,7 +292,7 @@ async def test_bingx_exit_long_uses_reduce_only():
             assert result["data"]["orderId"] == "exit-long"
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.asyncio
 async def test_bingx_exit_short_uses_reduce_only_buy():
     """EXIT_SHORT should submit BUY with SHORT positionSide and reduceOnly flag."""
     
@@ -337,9 +330,9 @@ async def test_bingx_exit_short_uses_reduce_only_buy():
         
         async def mock_post(url, headers, content, **kwargs):
             assert "symbol=BTC-USDT" in url
-            assert "side=BUY" in url
+            assert "side=BUY" in url  # EXIT_SHORT should be BUY
             assert "positionSide=SHORT" in url
-            assert "reduceOnly=true" in url
+            assert "reduceOnly=true" in url  # Critical: must have reduceOnly
             return MockResponse()
         
         with patch("services.order_gateway.src.exchanges.bingx_client.httpx.AsyncClient") as mock_client_class:
@@ -351,4 +344,58 @@ async def test_bingx_exit_short_uses_reduce_only_buy():
             
             result = await bingx_place_order(account_config, order)
             assert result["data"]["orderId"] == "exit-short"
+
+
+@pytest.mark.asyncio
+async def test_bingx_enter_long_no_reduce_only():
+    """ENTER_LONG should NOT have reduceOnly flag."""
+    
+    account_config = AccountConfig(
+        account_id="demo_account",
+        exchange="bingx",
+        mode="demo",
+        api_key_env="VST_API_KEY",
+        secret_key_env="VST_SECRET_KEY",
+    )
+    
+    order = OpenOrderRequest(
+        account=AccountRef(exchange="bingx", account_id="demo_account"),
+        symbol="BTCUSDT",
+        side="long",
+        entry_type="market",
+        quantity=1.0,
+        command=TvCommand.ENTER_LONG,
+        take_profits=[],
+        stop_loss=None,
+        leverage=None,
+        meta={},
+    )
+    
+    with patch.dict(os.environ, {"VST_API_KEY": "vst_key", "VST_SECRET_KEY": "vst_secret"}):
+        class MockResponse:
+            def __init__(self):
+                self.status_code = 200
+            
+            def json(self):
+                return {"code": 0, "data": {"orderId": "enter-long"}}
+            
+            def raise_for_status(self):
+                pass
+        
+        async def mock_post(url, headers, content, **kwargs):
+            assert "symbol=BTC-USDT" in url
+            assert "side=BUY" in url  # ENTER_LONG should be BUY
+            assert "positionSide=LONG" in url
+            assert "reduceOnly=true" not in url  # Should NOT have reduceOnly for entry
+            return MockResponse()
+        
+        with patch("services.order_gateway.src.exchanges.bingx_client.httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client.post = mock_post
+            mock_client_class.return_value = mock_client
+            
+            result = await bingx_place_order(account_config, order)
+            assert result["data"]["orderId"] == "enter-long"
 

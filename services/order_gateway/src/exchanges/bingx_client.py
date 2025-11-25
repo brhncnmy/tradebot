@@ -147,22 +147,15 @@ async def bingx_place_order(
     # For now we support only MARKET entry orders
     # Determine if this is an exit order (closing position)
     from common.models.tv_command import TvCommand
-
-    is_exit = order.command in (
-        TvCommand.EXIT_LONG,
-        TvCommand.EXIT_SHORT,
-        TvCommand.EXIT_LONG_ALL,
-        TvCommand.EXIT_SHORT_ALL,
-        TvCommand.EXIT_LONG_PARTIAL,
-        TvCommand.EXIT_SHORT_PARTIAL,
-    )
+    is_exit = order.command in (TvCommand.EXIT_LONG, TvCommand.EXIT_SHORT, TvCommand.EXIT_LONG_ALL, TvCommand.EXIT_SHORT_ALL)
     
     # For entry: long → BUY, short → SELL
     # For exit: long → SELL (close long), short → BUY (close short)
-    side = "BUY" if order.side == "long" else "SELL"
     if is_exit:
-        # Flip the execution side when closing a position
+        # Flip the side for exit orders
         side = "SELL" if order.side == "long" else "BUY"
+    else:
+        side = "BUY" if order.side == "long" else "SELL"
     
     order_type = "MARKET" if order.entry_type == "market" else "LIMIT"
     
@@ -181,9 +174,9 @@ async def bingx_place_order(
         "quantity": quantity,
         "positionSide": position_side,
     }
-
+    
+    # For EXIT orders, add reduceOnly flag to ensure we close positions, not open new ones
     if is_exit:
-        # Reduce-only ensures BingX closes existing exposure instead of opening
         params["reduceOnly"] = "true"
     
     # Add price for limit orders

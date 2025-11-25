@@ -28,3 +28,4 @@ def test_to_bingx_symbol_non_matching():
     assert to_bingx_symbol("UNKNOWN") == "UNKNOWN"
     assert to_bingx_symbol("BTC") == "BTC"
 
+

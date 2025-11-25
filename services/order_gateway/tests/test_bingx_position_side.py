@@ -6,13 +6,6 @@ from common.models.tv_command import TvCommand
 from services.order_gateway.src.exchanges.bingx_client import _map_position_side
 
 
-@pytest.fixture
-def anyio_backend():
-    """Force asyncio backend for AnyIO-powered tests."""
-
-    return "asyncio"
-
-
 def test_map_position_side_long():
     """Test positionSide mapping for long positions."""
     assert _map_position_side("long") == "LONG"
@@ -38,7 +31,7 @@ def test_map_position_side_invalid():
         _map_position_side("")
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.asyncio
 async def test_bingx_order_includes_position_side():
     """Test that BingX order params include positionSide."""
     import os

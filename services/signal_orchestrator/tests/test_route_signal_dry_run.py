@@ -1,8 +1,11 @@
+import importlib
+import os
 from typing import Optional
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
+from common.utils import config as config_module
 from services.signal_orchestrator.src.main import app
 
 client = TestClient(app)
@@ -186,3 +189,73 @@ def test_route_exit_long_signal(mock_client_class):
     assert forwarded_json["command"] == "EXIT_LONG"
     assert forwarded_json["symbol"] == "BTCUSDT"
     assert forwarded_json["side"] == "long"
+
+
+@patch("services.signal_orchestrator.src.main.httpx.AsyncClient")
+def test_route_signal_to_multiple_accounts(mock_client_class, monkeypatch):
+    """Test that a signal is routed to multiple accounts when secondary credentials are present."""
+    # Enable secondary account
+    monkeypatch.setenv("BINGX_SECOND_API_KEY", "secondary_key")
+    monkeypatch.setenv("BINGX_SECOND_SECRET_KEY", "secondary_secret")
+    importlib.reload(config_module)
+    
+    payload = {
+        "command": "ENTER_LONG",
+        "source": "tradingview",
+        "strategy_name": "tv_test_strategy",
+        "symbol": "BTCUSDT",
+        "side": "long",
+        "entry_type": "market",
+        "entry_price": None,
+        "quantity": 0.001,
+        "leverage": 10,
+        "margin_type": None,
+        "tp_close_pct": None,
+        "risk_per_trade_pct": None,
+        "stop_loss": None,
+        "take_profits": [],
+        "routing_profile": "default",
+        "timestamp": None,
+        "raw_payload": "{\"symbol\": \"BTCUSDT\"}",
+    }
+    
+    dummy_response = DummyResponse(
+        status_code=200,
+        json_data={
+            "status": "accepted",
+            "mode": "demo",
+            "order_id": "test-order-id"
+        }
+    )
+    
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post = AsyncMock(return_value=dummy_response)
+    mock_client_class.return_value = mock_client
+    
+    response = client.post("/signals", json=payload)
+    
+    assert response.status_code == 200
+    response_data = response.json()
+    assert response_data["status"] == "processed"
+    assert response_data["routed_accounts"] == 2  # Should route to both accounts
+    
+    # Verify the mock was called twice (once for each account)
+    assert mock_client.post.call_count == 2
+    
+    # Verify both calls have the same order parameters
+    calls = mock_client.post.call_args_list
+    assert len(calls) == 2
+    
+    # Both calls should have the same command and symbol
+    for call in calls:
+        forwarded_json = call[1]["json"]
+        assert forwarded_json["command"] == "ENTER_LONG"
+        assert forwarded_json["symbol"] == "BTCUSDT"
+        assert forwarded_json["quantity"] == 0.001
+    
+    # Cleanup: remove secondary env vars and reload
+    monkeypatch.delenv("BINGX_SECOND_API_KEY", raising=False)
+    monkeypatch.delenv("BINGX_SECOND_SECRET_KEY", raising=False)
+    importlib.reload(config_module)
