@@ -1,3 +1,4 @@
+import os
 from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel
@@ -5,6 +6,7 @@ from pydantic import BaseModel
 
 class AccountConfig(BaseModel):
     """Trading account configuration."""
+
     account_id: str
     exchange: str
     mode: Literal["dry", "test", "demo", "live"] = "dry"
@@ -21,7 +23,7 @@ _accounts: Dict[str, AccountConfig] = {
         mode="test",  # Test mode: uses /order/test endpoint (no real orders)
         api_key_env="BINGX_API_KEY",
         secret_key_env="BINGX_API_SECRET",
-        source_key_env=None  # Optional, not in .env by default
+        source_key_env=None,  # Optional, not in .env by default
     ),
     "bingx_vst_demo": AccountConfig(
         account_id="bingx_vst_demo",
@@ -29,13 +31,31 @@ _accounts: Dict[str, AccountConfig] = {
         mode="demo",  # Demo mode: uses VST host with virtual USDT
         api_key_env="BINGX_VST_API_KEY",
         secret_key_env="BINGX_VST_API_SECRET",
-        source_key_env=None  # Optional, not in .env by default
-    )
+        source_key_env=None,  # Optional, not in .env by default
+    ),
+    "bingx_vst_demo_secondary": AccountConfig(
+        account_id="bingx_vst_demo_secondary",
+        exchange="bingx",
+        mode="demo",
+        api_key_env="BINGX_SECOND_API_KEY",
+        secret_key_env="BINGX_SECOND_API_SECRET",
+        source_key_env=None,
+    ),
 }
+
+
+def _default_profile_accounts() -> List[str]:
+    """Build default routing profile account list, enabling secondary demo if credentials exist."""
+
+    account_ids = ["bingx_vst_demo"]
+    if os.getenv("BINGX_SECOND_API_KEY") and os.getenv("BINGX_SECOND_API_SECRET"):
+        account_ids.append("bingx_vst_demo_secondary")
+    return account_ids
+
 
 # In-memory routing profiles
 _routing_profiles: Dict[str, List[str]] = {
-    "default": ["bingx_vst_demo"]
+    "default": _default_profile_accounts()
 }
 
 

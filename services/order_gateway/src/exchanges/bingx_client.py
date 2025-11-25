@@ -147,15 +147,22 @@ async def bingx_place_order(
     # For now we support only MARKET entry orders
     # Determine if this is an exit order (closing position)
     from common.models.tv_command import TvCommand
-    is_exit = order.command in (TvCommand.EXIT_LONG, TvCommand.EXIT_SHORT, TvCommand.EXIT_LONG_ALL, TvCommand.EXIT_SHORT_ALL)
+
+    is_exit = order.command in (
+        TvCommand.EXIT_LONG,
+        TvCommand.EXIT_SHORT,
+        TvCommand.EXIT_LONG_ALL,
+        TvCommand.EXIT_SHORT_ALL,
+        TvCommand.EXIT_LONG_PARTIAL,
+        TvCommand.EXIT_SHORT_PARTIAL,
+    )
     
     # For entry: long → BUY, short → SELL
     # For exit: long → SELL (close long), short → BUY (close short)
+    side = "BUY" if order.side == "long" else "SELL"
     if is_exit:
-        # Flip the side for exit orders
+        # Flip the execution side when closing a position
         side = "SELL" if order.side == "long" else "BUY"
-    else:
-        side = "BUY" if order.side == "long" else "SELL"
     
     order_type = "MARKET" if order.entry_type == "market" else "LIMIT"
     
@@ -174,6 +181,10 @@ async def bingx_place_order(
         "quantity": quantity,
         "positionSide": position_side,
     }
+
+    if is_exit:
+        # Reduce-only ensures BingX closes existing exposure instead of opening
+        params["reduceOnly"] = "true"
     
     # Add price for limit orders
     if order.entry_type == "limit" and order.price is not None:
@@ -198,13 +209,15 @@ async def bingx_place_order(
     
     # Log request (without secrets)
     logger.info(
-        "BingX request: mode=%s, account=%s, symbol=%s, side=%s, positionSide=%s, quantity=%s, endpoint=%s",
+        "BingX request: mode=%s, account=%s, command=%s, symbol=%s, side=%s, positionSide=%s, quantity=%s, reduceOnly=%s, endpoint=%s",
         account_config.mode,
         account_config.account_id,
+        order.command.value,
         symbol,
         side,
         position_side,
         quantity,
+        params.get("reduceOnly", "false"),
         env.order_path,
     )
     
