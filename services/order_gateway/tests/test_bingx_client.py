@@ -175,6 +175,7 @@ async def test_bingx_place_order_demo_mode():
         mode="demo",
         api_key_env="VST_API_KEY",
         secret_key_env="VST_SECRET_KEY",
+        supports_reduce_only=True,
     )
     
     order = OpenOrderRequest(
@@ -248,6 +249,7 @@ async def test_bingx_exit_long_uses_reduce_only():
         mode="demo",
         api_key_env="VST_API_KEY",
         secret_key_env="VST_SECRET_KEY",
+        supports_reduce_only=True,
     )
     
     order = OpenOrderRequest(
@@ -302,6 +304,7 @@ async def test_bingx_exit_short_uses_reduce_only_buy():
         mode="demo",
         api_key_env="VST_API_KEY",
         secret_key_env="VST_SECRET_KEY",
+        supports_reduce_only=True,
     )
     
     order = OpenOrderRequest(
@@ -344,6 +347,104 @@ async def test_bingx_exit_short_uses_reduce_only_buy():
             
             result = await bingx_place_order(account_config, order)
             assert result["data"]["orderId"] == "exit-short"
+
+
+@pytest.mark.asyncio
+async def test_bingx_exit_long_skip_reduce_only_when_not_supported():
+    """EXIT_LONG should omit reduceOnly when account is hedge-mode."""
+    account_config = AccountConfig(
+        account_id="hedge_demo",
+        exchange="bingx",
+        mode="demo",
+        api_key_env="VST_API_KEY",
+        secret_key_env="VST_SECRET_KEY",
+        supports_reduce_only=False,
+    )
+    order = OpenOrderRequest(
+        account=AccountRef(exchange="bingx", account_id="hedge_demo"),
+        symbol="ETHUSDT",
+        side="long",
+        entry_type="market",
+        quantity=2.5,
+        command=TvCommand.EXIT_LONG,
+        take_profits=[],
+        stop_loss=None,
+        leverage=None,
+        meta={},
+    )
+    with patch.dict(os.environ, {"VST_API_KEY": "vst_key", "VST_SECRET_KEY": "vst_secret"}):
+        class MockResponse:
+            def __init__(self):
+                self.status_code = 200
+
+            def json(self):
+                return {"code": 0, "data": {"orderId": "exit-long-hedge"}}
+
+            def raise_for_status(self):
+                pass
+
+        async def mock_post(url, headers, content, **kwargs):
+            assert "reduceOnly=true" not in url
+            return MockResponse()
+
+        with patch("services.order_gateway.src.exchanges.bingx_client.httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client.post = mock_post
+            mock_client_class.return_value = mock_client
+
+            result = await bingx_place_order(account_config, order)
+            assert result["data"]["orderId"] == "exit-long-hedge"
+
+
+@pytest.mark.asyncio
+async def test_bingx_exit_short_skip_reduce_only_when_not_supported():
+    """EXIT_SHORT should omit reduceOnly when account is hedge-mode."""
+    account_config = AccountConfig(
+        account_id="hedge_demo",
+        exchange="bingx",
+        mode="demo",
+        api_key_env="VST_API_KEY",
+        secret_key_env="VST_SECRET_KEY",
+        supports_reduce_only=False,
+    )
+    order = OpenOrderRequest(
+        account=AccountRef(exchange="bingx", account_id="hedge_demo"),
+        symbol="BTCUSDT",
+        side="short",
+        entry_type="market",
+        quantity=1.0,
+        command=TvCommand.EXIT_SHORT,
+        take_profits=[],
+        stop_loss=None,
+        leverage=None,
+        meta={},
+    )
+    with patch.dict(os.environ, {"VST_API_KEY": "vst_key", "VST_SECRET_KEY": "vst_secret"}):
+        class MockResponse:
+            def __init__(self):
+                self.status_code = 200
+
+            def json(self):
+                return {"code": 0, "data": {"orderId": "exit-short-hedge"}}
+
+            def raise_for_status(self):
+                pass
+
+        async def mock_post(url, headers, content, **kwargs):
+            assert "reduceOnly=true" not in url
+            return MockResponse()
+
+        with patch("services.order_gateway.src.exchanges.bingx_client.httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client.post = mock_post
+            mock_client_class.return_value = mock_client
+
+            result = await bingx_place_order(account_config, order)
+            assert result["data"]["orderId"] == "exit-short-hedge"
 
 
 @pytest.mark.asyncio

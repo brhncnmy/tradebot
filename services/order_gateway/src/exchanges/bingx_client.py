@@ -175,8 +175,8 @@ async def bingx_place_order(
         "positionSide": position_side,
     }
     
-    # For EXIT orders, add reduceOnly flag to ensure we close positions, not open new ones
-    if is_exit:
+    # For EXIT orders, add reduceOnly flag only when supported by the account (one-way mode)
+    if is_exit and account_config.supports_reduce_only:
         params["reduceOnly"] = "true"
     
     # Add price for limit orders
@@ -202,7 +202,7 @@ async def bingx_place_order(
     
     # Log request (without secrets)
     logger.info(
-        "BingX request: mode=%s, account=%s, command=%s, symbol=%s, side=%s, positionSide=%s, quantity=%s, reduceOnly=%s, endpoint=%s",
+        "BingX request: mode=%s, account=%s, command=%s, symbol=%s, side=%s, positionSide=%s, quantity=%s, reduceOnly_applied=%s, endpoint=%s",
         account_config.mode,
         account_config.account_id,
         order.command.value,
@@ -210,7 +210,7 @@ async def bingx_place_order(
         side,
         position_side,
         quantity,
-        params.get("reduceOnly", "false"),
+        "true" if params.get("reduceOnly") else "false",
         env.order_path,
     )
     
