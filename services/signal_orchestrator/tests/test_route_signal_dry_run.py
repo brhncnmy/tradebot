@@ -528,3 +528,67 @@ def test_routing_profile_demo_1_2_without_account_2(mock_client_class, monkeypat
     call_args = mock_client.post.call_args
     forwarded_json = call_args[1]["json"]
     assert forwarded_json["account"]["account_id"] == "bingx_1"
+
+
+@patch("services.signal_orchestrator.src.main.httpx.AsyncClient")
+def test_no_position_response_treated_as_noop(mock_client_class, monkeypatch):
+    """Test that order-gateway returning HTTP 200 with order_status=no_position is treated as INFO, not ERROR."""
+    # Enable account 1
+    monkeypatch.setenv("BINGX_1_API_KEY", "key_1")
+    monkeypatch.setenv("BINGX_1_API_SECRET", "secret_1")
+    importlib.reload(config_module)
+    
+    payload = {
+        "command": "EXIT_LONG",
+        "source": "tradingview",
+        "strategy_name": "tv_test_strategy",
+        "symbol": "BTCUSDT",
+        "side": "long",
+        "entry_type": "market",
+        "entry_price": None,
+        "quantity": 0.001,
+        "leverage": 10,
+        "margin_type": None,
+        "tp_close_pct": None,
+        "risk_per_trade_pct": None,
+        "stop_loss": None,
+        "take_profits": [],
+        "routing_profile": "demo_1",
+        "timestamp": None,
+        "raw_payload": "{\"symbol\": \"BTCUSDT\"}",
+    }
+    
+    # Mock order-gateway returning HTTP 200 with no_position status
+    dummy_response = DummyResponse(
+        status_code=200,
+        json_data={
+            "ok": True,
+            "exchange": "bingx",
+            "mode": "demo",
+            "account_id": "bingx_1",
+            "order_status": "no_position",
+            "api_code": 101205,
+            "api_msg": "No position to close",
+        }
+    )
+    
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.__aexit__.return_value = None
+    mock_client.post = AsyncMock(return_value=dummy_response)
+    mock_client_class.return_value = mock_client
+    
+    response = client.post("/signals", json=payload)
+    
+    assert response.status_code == 200
+    response_data = response.json()
+    assert response_data["status"] == "processed"
+    assert response_data["routed_accounts"] == 1
+    
+    # Verify the mock was called
+    assert mock_client.post.call_count == 1
+    
+    # Cleanup
+    monkeypatch.delenv("BINGX_1_API_KEY", raising=False)
+    monkeypatch.delenv("BINGX_1_API_SECRET", raising=False)
+    importlib.reload(config_module)

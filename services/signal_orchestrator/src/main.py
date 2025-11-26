@@ -134,14 +134,74 @@ async def handle_signal(signal: NormalizedSignal):
         url = f"{ORDER_GATEWAY_URL}/orders/open"
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
-                response = await client.post(url, json=order_request.dict())
-                response.raise_for_status()
-                result = response.json()
-                logger.info(f"Order forwarded to gateway for {account.account_id}, status: {response.status_code}")
+                resp = await client.post(url, json=order_request.dict())
+                status = resp.status_code
+                try:
+                    data = resp.json()
+                except ValueError:
+                    data = None
+                
+                if status != 200:
+                    logger.error(
+                        "Order-gateway HTTP error: account=%s status=%s body=%r",
+                        account.account_id,
+                        status,
+                        data,
+                    )
+                    results.append({
+                        "account_id": account.account_id,
+                        "status": "error",
+                        "error": f"HTTP {status}",
+                        "body": data,
+                    })
+                    continue
+                
+                api_code = (data or {}).get("api_code")
+                order_status = (data or {}).get("order_status")
+                ok = (data or {}).get("ok", False)
+                
+                if order_status == "no_position" and api_code == 101205:
+                    logger.info(
+                        "No position to close on BingX; treating as no-op: account=%s symbol=%s api_code=%s api_msg=%s",
+                        account.account_id,
+                        signal.symbol,
+                        api_code,
+                        (data or {}).get("api_msg"),
+                    )
+                    results.append({
+                        "account_id": account.account_id,
+                        "status": 200,
+                        "result": data,
+                    })
+                    continue
+                
+                if not ok:
+                    logger.error(
+                        "Order-gateway reported error: account=%s order_status=%s api_code=%s api_msg=%s",
+                        account.account_id,
+                        order_status,
+                        api_code,
+                        (data or {}).get("api_msg"),
+                    )
+                    results.append({
+                        "account_id": account.account_id,
+                        "status": "error",
+                        "error": (data or {}).get("api_msg", "Unknown error"),
+                        "api_code": api_code,
+                    })
+                    continue
+                
+                logger.info(
+                    "Order forwarded successfully: account=%s symbol=%s order_status=%s api_code=%s",
+                    account.account_id,
+                    signal.symbol,
+                    order_status or "ok",
+                    api_code,
+                )
                 results.append({
                     "account_id": account.account_id,
-                    "status": response.status_code,
-                    "result": result
+                    "status": status,
+                    "result": data,
                 })
             except httpx.HTTPError as e:
                 logger.error(f"Failed to forward order for {account.account_id}: {e}")

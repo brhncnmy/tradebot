@@ -13,6 +13,7 @@ from services.order_gateway.src.exchanges.bingx_client import (
     build_signed_query,
     get_bingx_env,
     bingx_place_order,
+    BingxAPIError,
 )
 
 
@@ -585,11 +586,80 @@ async def test_bingx_api_error_logging_includes_context(caplog):
                 mock_client.post = mock_post
                 mock_client_class.return_value = mock_client
                 
-                with pytest.raises(RuntimeError, match="BingX API error") as exc_info:
+                with pytest.raises(BingxAPIError) as exc_info:
                     await bingx_place_order(account_config, order)
+                
+                # Verify the error has correct attributes
+                assert exc_info.value.api_code == 109400
+                assert exc_info.value.api_msg == "Test error message"
+                assert exc_info.value.is_no_position is False
                 
                 # Verify the error message includes required context
                 error_msg = str(exc_info.value)
                 assert "BingX API error" in error_msg
                 assert "Test error message" in error_msg or "109400" in error_msg
+
+
+@pytest.mark.asyncio
+async def test_bingx_no_position_error_101205():
+    """Test that code 101205 raises BingxAPIError with is_no_position=True."""
+    import logging
+    
+    account_config = AccountConfig(
+        account_id="test_account",
+        exchange="bingx",
+        mode="demo",
+        env_pairs=[("TEST_API_KEY", "TEST_SECRET_KEY")],
+    )
+    
+    order = OpenOrderRequest(
+        account=AccountRef(exchange="bingx", account_id="test_account"),
+        symbol="BTCUSDT",
+        side="long",
+        entry_type="market",
+        quantity=0.001,
+        command=TvCommand.EXIT_LONG,
+        take_profits=[],
+        stop_loss=None,
+        leverage=None,
+        meta={},
+    )
+    
+    with patch.dict(os.environ, {"TEST_API_KEY": "test_key", "TEST_SECRET_KEY": "test_secret"}):
+        class MockResponse:
+            def __init__(self):
+                self.status_code = 200
+                
+            def json(self):
+                return {"code": 101205, "msg": "No position to close", "data": {}}
+                
+            def raise_for_status(self):
+                pass  # 200 OK, but API error code
+            
+            @property
+            def text(self):
+                return '{"code": 101205, "msg": "No position to close", "data": {}}'
+            
+            @property
+            def is_success(self):
+                return True
+        
+        async def mock_post(url, headers, content, **kwargs):
+            return MockResponse()
+        
+        with patch("services.order_gateway.src.exchanges.bingx_client.httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client.post = mock_post
+            mock_client_class.return_value = mock_client
+            
+            with pytest.raises(BingxAPIError) as exc_info:
+                await bingx_place_order(account_config, order)
+            
+            # Verify the error has correct attributes for no-position case
+            assert exc_info.value.api_code == 101205
+            assert exc_info.value.api_msg == "No position to close"
+            assert exc_info.value.is_no_position is True
+            assert exc_info.value.raw_body == {"code": 101205, "msg": "No position to close", "data": {}}
 

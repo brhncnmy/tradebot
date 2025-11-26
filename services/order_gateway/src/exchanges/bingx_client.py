@@ -1,4 +1,8 @@
-"""BingX Swap API client supporting test, demo, and live trading modes."""
+"""BingX Swap API client supporting test, demo, and live trading modes.
+
+Current error handling: Raises RuntimeError for any non-zero API code. HTTP errors raise httpx.HTTPError.
+Code 101205 ("No position to close") is currently treated as a hard error, but should be a soft/no-op.
+"""
 
 import hashlib
 import hmac
@@ -15,6 +19,17 @@ from common.utils.logging import get_logger
 from services.order_gateway.src.exchanges.symbol_utils import to_bingx_symbol
 
 logger = get_logger("bingx-client")
+
+
+class BingxAPIError(Exception):
+    """BingX API error with support for soft errors (e.g., no position to close)."""
+    
+    def __init__(self, api_code: int, api_msg: str, *, is_no_position: bool = False, raw_body: dict | None = None):
+        self.api_code = api_code
+        self.api_msg = api_msg
+        self.is_no_position = is_no_position
+        self.raw_body = raw_body or {}
+        super().__init__(f"BingX API error: {api_msg} (code: {api_code})")
 
 
 class BingxEnvironment(BaseModel):
@@ -284,6 +299,28 @@ async def bingx_place_order(
         code = data.get("code")
         if code not in (0, "0", None):
             error_msg = data.get("msg") or data.get("message", "Unknown error")
+            api_code_int = int(code) if code is not None else 0
+            
+            # Handle soft error: "No position to close" (code 101205)
+            if api_code_int == 101205:
+                logger.warning(
+                    "BingX soft error (no position): account=%s exchange=bingx command=%s symbol=%s side=%s positionSide=%s code=101205 msg=%s",
+                    account_config.account_id,
+                    account_config.exchange,
+                    order.command.value,
+                    symbol,
+                    side,
+                    position_side,
+                    error_msg,
+                )
+                raise BingxAPIError(
+                    api_code=api_code_int,
+                    api_msg=error_msg or "No position to close",
+                    is_no_position=True,
+                    raw_body=data,
+                )
+            
+            # Hard error for any other non-zero code
             logger.error(
                 "BingX API error: account=%s exchange=bingx command=%s symbol=%s side=%s positionSide=%s api_code=%s api_msg=%s",
                 account_config.account_id,
@@ -291,10 +328,14 @@ async def bingx_place_order(
                 symbol,
                 side,
                 position_side,
-                code,
+                api_code_int,
                 error_msg,
             )
-            raise RuntimeError(f"BingX API error: {error_msg} (code: {code})")
+            raise BingxAPIError(
+                api_code=api_code_int,
+                api_msg=error_msg or "Unknown error",
+                raw_body=data,
+            )
         
         return data
 

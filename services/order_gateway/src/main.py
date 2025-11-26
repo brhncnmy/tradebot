@@ -5,13 +5,14 @@ from enum import Enum
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 
 from common.models.normalized_signal import Side
 from common.models.order_request import OpenOrderRequest
 from common.models.tv_command import TvCommand
 from common.utils.config import get_account
 from common.utils.logging import get_logger
-from services.order_gateway.src.exchanges.bingx_client import bingx_place_order
+from services.order_gateway.src.exchanges.bingx_client import bingx_place_order, BingxAPIError
 
 app = FastAPI(title="order-gateway")
 logger = get_logger("order-gateway")
@@ -294,12 +295,58 @@ async def handle_bingx_order(account_cfg, request: OpenOrderRequest):
         )
         
         return {
-            "status": "accepted",
-            "mode": mode,
+            "ok": True,
             "exchange": account_cfg.exchange,
+            "mode": mode,
+            "account_id": account_cfg.account_id,
+            "order_status": "filled",
+            "api_code": 0,
+            "api_msg": "",
             "order_id": order_id,
-            "raw": response
         }
+    except BingxAPIError as exc:
+        if exc.is_no_position:
+            # SOFT ERROR, HTTP 200, explicit no-position status
+            logger.info(
+                "BingX no-position case (soft error): account_id=%s symbol=%s api_code=%s api_msg=%s",
+                account_cfg.account_id,
+                request.symbol,
+                exc.api_code,
+                exc.api_msg,
+            )
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "ok": True,
+                    "exchange": account_cfg.exchange,
+                    "mode": mode,
+                    "account_id": account_cfg.account_id,
+                    "order_status": "no_position",
+                    "api_code": exc.api_code,
+                    "api_msg": exc.api_msg,
+                },
+            )
+        
+        # HARD ERROR, HTTP 400
+        logger.error(
+            "BingX hard API error: account_id=%s symbol=%s api_code=%s api_msg=%s",
+            account_cfg.account_id,
+            request.symbol,
+            exc.api_code,
+            exc.api_msg,
+        )
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "exchange": account_cfg.exchange,
+                "mode": mode,
+                "account_id": account_cfg.account_id,
+                "order_status": "error",
+                "api_code": exc.api_code,
+                "api_msg": exc.api_msg,
+            },
+        )
     except ValueError as e:
         logger.error(f"BingX order validation failed: {e}")
         raise HTTPException(
@@ -307,15 +354,13 @@ async def handle_bingx_order(account_cfg, request: OpenOrderRequest):
             detail=str(e)
         )
     except RuntimeError as e:
-        # BingX API errors (e.g., signature verification failed, invalid API key)
+        # Legacy: BingX API errors (should not happen with new BingxAPIError, but kept for backward compatibility)
         error_msg = str(e)
         logger.error(
-            f"BingX API error: mode={mode}, account_id={account_cfg.account_id}, "
+            f"BingX API error (legacy): mode={mode}, account_id={account_cfg.account_id}, "
             f"symbol={request.symbol}, side={request.side}, quantity={request.quantity}, "
             f"error={error_msg}"
         )
-        # Return 400 for API-level errors (bad request, authentication issues)
-        # This is more appropriate than 502 (bad gateway) for API errors
         raise HTTPException(
             status_code=400,
             detail=f"BingX API error: {error_msg}"
