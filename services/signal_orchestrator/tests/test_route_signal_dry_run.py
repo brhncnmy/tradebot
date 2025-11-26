@@ -29,8 +29,13 @@ class DummyResponse:
 
 
 @patch("services.signal_orchestrator.src.main.httpx.AsyncClient")
-def test_route_signal_dry_run(mock_client_class):
+def test_route_signal_dry_run(mock_client_class, monkeypatch):
     """Test that a signal is routed to order-gateway in DRY_RUN mode."""
+    # Enable account 1 for default routing
+    monkeypatch.setenv("BINGX_1_API_KEY", "key_1")
+    monkeypatch.setenv("BINGX_1_API_SECRET", "secret_1")
+    importlib.reload(config_module)
+    
     payload = {
         "command": "ENTER_LONG",
         "source": "tradingview",
@@ -85,8 +90,13 @@ def test_route_signal_dry_run(mock_client_class):
 
 
 @patch("services.signal_orchestrator.src.main.httpx.AsyncClient")
-def test_route_exit_short_signal(mock_client_class):
+def test_route_exit_short_signal(mock_client_class, monkeypatch):
     """Test that EXIT_SHORT signal is routed to order-gateway."""
+    # Enable account 1 for default routing
+    monkeypatch.setenv("BINGX_1_API_KEY", "key_1")
+    monkeypatch.setenv("BINGX_1_API_SECRET", "secret_1")
+    importlib.reload(config_module)
+    
     payload = {
         "command": "EXIT_SHORT",
         "source": "tradingview",
@@ -139,8 +149,13 @@ def test_route_exit_short_signal(mock_client_class):
 
 
 @patch("services.signal_orchestrator.src.main.httpx.AsyncClient")
-def test_route_exit_long_signal(mock_client_class):
+def test_route_exit_long_signal(mock_client_class, monkeypatch):
     """Test that EXIT_LONG signal is routed to order-gateway."""
+    # Enable account 1 for default routing
+    monkeypatch.setenv("BINGX_1_API_KEY", "key_1")
+    monkeypatch.setenv("BINGX_1_API_SECRET", "secret_1")
+    importlib.reload(config_module)
+    
     payload = {
         "command": "EXIT_LONG",
         "source": "tradingview",
@@ -193,10 +208,12 @@ def test_route_exit_long_signal(mock_client_class):
 
 @patch("services.signal_orchestrator.src.main.httpx.AsyncClient")
 def test_route_signal_to_multiple_accounts(mock_client_class, monkeypatch):
-    """Test that a signal is routed to multiple accounts when secondary credentials are present."""
-    # Enable secondary account
-    monkeypatch.setenv("BINGX_SECOND_API_KEY", "secondary_key")
-    monkeypatch.setenv("BINGX_SECOND_SECRET_KEY", "secondary_secret")
+    """Test that a signal is routed to multiple accounts when both accounts are configured."""
+    # Enable both accounts
+    monkeypatch.setenv("BINGX_1_API_KEY", "key_1")
+    monkeypatch.setenv("BINGX_1_API_SECRET", "secret_1")
+    monkeypatch.setenv("BINGX_2_API_KEY", "key_2")
+    monkeypatch.setenv("BINGX_2_API_SECRET", "secret_2")
     importlib.reload(config_module)
     
     payload = {
@@ -214,7 +231,7 @@ def test_route_signal_to_multiple_accounts(mock_client_class, monkeypatch):
         "risk_per_trade_pct": None,
         "stop_loss": None,
         "take_profits": [],
-        "routing_profile": "default",
+        "routing_profile": "demo_1_2",
         "timestamp": None,
         "raw_payload": "{\"symbol\": \"BTCUSDT\"}",
     }
@@ -255,18 +272,22 @@ def test_route_signal_to_multiple_accounts(mock_client_class, monkeypatch):
         assert forwarded_json["symbol"] == "BTCUSDT"
         assert forwarded_json["quantity"] == 0.001
     
-    # Cleanup: remove secondary env vars and reload
-    monkeypatch.delenv("BINGX_SECOND_API_KEY", raising=False)
-    monkeypatch.delenv("BINGX_SECOND_SECRET_KEY", raising=False)
+    # Cleanup: remove env vars and reload
+    monkeypatch.delenv("BINGX_1_API_KEY", raising=False)
+    monkeypatch.delenv("BINGX_1_API_SECRET", raising=False)
+    monkeypatch.delenv("BINGX_2_API_KEY", raising=False)
+    monkeypatch.delenv("BINGX_2_API_SECRET", raising=False)
     importlib.reload(config_module)
 
 
 @patch("services.signal_orchestrator.src.main.httpx.AsyncClient")
-def test_routing_profile_demo_primary_only(mock_client_class, monkeypatch):
-    """Test that routing_profile=demo_primary_only routes only to primary demo account."""
-    # Ensure secondary is not configured
-    monkeypatch.delenv("BINGX_SECOND_API_KEY", raising=False)
-    monkeypatch.delenv("BINGX_SECOND_SECRET_KEY", raising=False)
+def test_routing_profile_demo_1(mock_client_class, monkeypatch):
+    """Test that routing_profile=demo_1 routes only to bingx_1 account."""
+    # Enable account 1, disable account 2
+    monkeypatch.setenv("BINGX_1_API_KEY", "key_1")
+    monkeypatch.setenv("BINGX_1_API_SECRET", "secret_1")
+    monkeypatch.delenv("BINGX_2_API_KEY", raising=False)
+    monkeypatch.delenv("BINGX_2_API_SECRET", raising=False)
     importlib.reload(config_module)
     
     payload = {
@@ -284,7 +305,7 @@ def test_routing_profile_demo_primary_only(mock_client_class, monkeypatch):
         "risk_per_trade_pct": None,
         "stop_loss": None,
         "take_profits": [],
-        "routing_profile": "demo_primary_only",
+        "routing_profile": "demo_1",
         "timestamp": None,
         "raw_payload": "{\"symbol\": \"BTCUSDT\"}",
     }
@@ -311,19 +332,21 @@ def test_routing_profile_demo_primary_only(mock_client_class, monkeypatch):
     assert response_data["status"] == "processed"
     assert response_data["routed_accounts"] == 1
     
-    # Verify only one call was made (to primary only)
+    # Verify only one call was made (to bingx_1 only)
     assert mock_client.post.call_count == 1
     call_args = mock_client.post.call_args
     forwarded_json = call_args[1]["json"]
-    assert forwarded_json["account"]["account_id"] == "bingx_vst_demo"
+    assert forwarded_json["account"]["account_id"] == "bingx_1"
 
 
 @patch("services.signal_orchestrator.src.main.httpx.AsyncClient")
-def test_routing_profile_demo_secondary_only_with_credentials(mock_client_class, monkeypatch):
-    """Test that routing_profile=demo_secondary_only routes to secondary when configured."""
-    # Enable secondary account
-    monkeypatch.setenv("BINGX_SECOND_API_KEY", "secondary_key")
-    monkeypatch.setenv("BINGX_SECOND_SECRET_KEY", "secondary_secret")
+def test_routing_profile_demo_2_with_credentials(mock_client_class, monkeypatch):
+    """Test that routing_profile=demo_2 routes to bingx_2 when configured."""
+    # Enable account 2, disable account 1
+    monkeypatch.delenv("BINGX_1_API_KEY", raising=False)
+    monkeypatch.delenv("BINGX_1_API_SECRET", raising=False)
+    monkeypatch.setenv("BINGX_2_API_KEY", "key_2")
+    monkeypatch.setenv("BINGX_2_API_SECRET", "secret_2")
     importlib.reload(config_module)
     
     payload = {
@@ -341,7 +364,7 @@ def test_routing_profile_demo_secondary_only_with_credentials(mock_client_class,
         "risk_per_trade_pct": None,
         "stop_loss": None,
         "take_profits": [],
-        "routing_profile": "demo_secondary_only",
+        "routing_profile": "demo_2",
         "timestamp": None,
         "raw_payload": "{\"symbol\": \"BTCUSDT\"}",
     }
@@ -368,24 +391,26 @@ def test_routing_profile_demo_secondary_only_with_credentials(mock_client_class,
     assert response_data["status"] == "processed"
     assert response_data["routed_accounts"] == 1
     
-    # Verify call was made to secondary account
+    # Verify call was made to bingx_2 account
     assert mock_client.post.call_count == 1
     call_args = mock_client.post.call_args
     forwarded_json = call_args[1]["json"]
-    assert forwarded_json["account"]["account_id"] == "bingx_vst_demo_secondary"
+    assert forwarded_json["account"]["account_id"] == "bingx_2"
     
     # Cleanup
-    monkeypatch.delenv("BINGX_SECOND_API_KEY", raising=False)
-    monkeypatch.delenv("BINGX_SECOND_SECRET_KEY", raising=False)
+    monkeypatch.delenv("BINGX_2_API_KEY", raising=False)
+    monkeypatch.delenv("BINGX_2_API_SECRET", raising=False)
     importlib.reload(config_module)
 
 
 @patch("services.signal_orchestrator.src.main.httpx.AsyncClient")
-def test_routing_profile_demo_both_with_both_configured(mock_client_class, monkeypatch):
-    """Test that routing_profile=demo_both routes to both accounts when both are configured."""
-    # Enable secondary account
-    monkeypatch.setenv("BINGX_SECOND_API_KEY", "secondary_key")
-    monkeypatch.setenv("BINGX_SECOND_SECRET_KEY", "secondary_secret")
+def test_routing_profile_demo_1_2_with_both_configured(mock_client_class, monkeypatch):
+    """Test that routing_profile=demo_1_2 routes to both accounts when both are configured."""
+    # Enable both accounts
+    monkeypatch.setenv("BINGX_1_API_KEY", "key_1")
+    monkeypatch.setenv("BINGX_1_API_SECRET", "secret_1")
+    monkeypatch.setenv("BINGX_2_API_KEY", "key_2")
+    monkeypatch.setenv("BINGX_2_API_SECRET", "secret_2")
     importlib.reload(config_module)
     
     payload = {
@@ -403,7 +428,7 @@ def test_routing_profile_demo_both_with_both_configured(mock_client_class, monke
         "risk_per_trade_pct": None,
         "stop_loss": None,
         "take_profits": [],
-        "routing_profile": "demo_both",
+        "routing_profile": "demo_1_2",
         "timestamp": None,
         "raw_payload": "{\"symbol\": \"BTCUSDT\"}",
     }
@@ -434,21 +459,25 @@ def test_routing_profile_demo_both_with_both_configured(mock_client_class, monke
     assert mock_client.post.call_count == 2
     calls = mock_client.post.call_args_list
     account_ids = [call[1]["json"]["account"]["account_id"] for call in calls]
-    assert "bingx_vst_demo" in account_ids
-    assert "bingx_vst_demo_secondary" in account_ids
+    assert "bingx_1" in account_ids
+    assert "bingx_2" in account_ids
     
     # Cleanup
-    monkeypatch.delenv("BINGX_SECOND_API_KEY", raising=False)
-    monkeypatch.delenv("BINGX_SECOND_SECRET_KEY", raising=False)
+    monkeypatch.delenv("BINGX_1_API_KEY", raising=False)
+    monkeypatch.delenv("BINGX_1_API_SECRET", raising=False)
+    monkeypatch.delenv("BINGX_2_API_KEY", raising=False)
+    monkeypatch.delenv("BINGX_2_API_SECRET", raising=False)
     importlib.reload(config_module)
 
 
 @patch("services.signal_orchestrator.src.main.httpx.AsyncClient")
-def test_routing_profile_demo_both_without_secondary(mock_client_class, monkeypatch):
-    """Test that routing_profile=demo_both falls back to primary when secondary is not configured."""
-    # Ensure secondary is not configured
-    monkeypatch.delenv("BINGX_SECOND_API_KEY", raising=False)
-    monkeypatch.delenv("BINGX_SECOND_SECRET_KEY", raising=False)
+def test_routing_profile_demo_1_2_without_account_2(mock_client_class, monkeypatch):
+    """Test that routing_profile=demo_1_2 falls back to bingx_1 when bingx_2 is not configured."""
+    # Enable account 1, disable account 2
+    monkeypatch.setenv("BINGX_1_API_KEY", "key_1")
+    monkeypatch.setenv("BINGX_1_API_SECRET", "secret_1")
+    monkeypatch.delenv("BINGX_2_API_KEY", raising=False)
+    monkeypatch.delenv("BINGX_2_API_SECRET", raising=False)
     importlib.reload(config_module)
     
     payload = {
@@ -466,7 +495,7 @@ def test_routing_profile_demo_both_without_secondary(mock_client_class, monkeypa
         "risk_per_trade_pct": None,
         "stop_loss": None,
         "take_profits": [],
-        "routing_profile": "demo_both",
+        "routing_profile": "demo_1_2",
         "timestamp": None,
         "raw_payload": "{\"symbol\": \"BTCUSDT\"}",
     }
@@ -491,11 +520,11 @@ def test_routing_profile_demo_both_without_secondary(mock_client_class, monkeypa
     assert response.status_code == 200
     response_data = response.json()
     assert response_data["status"] == "processed"
-    # Should route to primary only (secondary unavailable)
+    # Should route to bingx_1 only (bingx_2 unavailable)
     assert response_data["routed_accounts"] == 1
     
-    # Verify only one call was made (to primary)
+    # Verify only one call was made (to bingx_1)
     assert mock_client.post.call_count == 1
     call_args = mock_client.post.call_args
     forwarded_json = call_args[1]["json"]
-    assert forwarded_json["account"]["account_id"] == "bingx_vst_demo"
+    assert forwarded_json["account"]["account_id"] == "bingx_1"

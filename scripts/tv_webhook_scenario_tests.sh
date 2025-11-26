@@ -4,7 +4,7 @@ set -euo pipefail
 BASE_URL="${BASE_URL:-http://localhost:8000}"
 ENDPOINT="${BASE_URL%/}/webhook/tradingview"
 SYMBOL="${SYMBOL:-HBARUSDT.P}"
-ROUTING_PROFILE="${ROUTING_PROFILE:-demo_primary_only}"
+ROUTING_PROFILE="${ROUTING_PROFILE:-demo_1}"
 
 declare -A SCENARIO_STATUS
 

@@ -307,7 +307,7 @@ def map_tradingview_payload_to_normalized_signal(
             tp_list.append(TakeProfitLevel(price=tp.price, size_pct=tp.size_pct))
     
     # Determine routing_profile
-    routing_profile = payload.routing_profile or "default"
+    routing_profile = payload.routing_profile or "demo_1"
     
     # Normalize symbol (e.g. "BINANCE:LIGHTUSDT.P" -> "LIGHTUSDT")
     normalized_symbol = normalize_symbol(payload.symbol)

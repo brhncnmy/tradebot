@@ -16,24 +16,6 @@ def _get_logger():
     return _logger
 
 
-def get_first_non_empty_pair(env_pairs: List[Tuple[str, str]]) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Get the first non-empty API key/secret pair from a list of candidate env var pairs.
-    
-    Args:
-        env_pairs: List of (api_key_env, secret_key_env) tuples to try in order
-        
-    Returns:
-        Tuple of (api_key, secret_key) or (None, None) if no pair is found
-    """
-    for api_key_env, secret_key_env in env_pairs:
-        api_key = os.getenv(api_key_env)
-        secret_key = os.getenv(secret_key_env)
-        if api_key and secret_key:
-            return api_key, secret_key
-    return None, None
-
-
 class AccountConfig(BaseModel):
     """Trading account configuration."""
     account_id: str
@@ -49,13 +31,18 @@ class AccountConfig(BaseModel):
     
     def get_credentials(self) -> Tuple[Optional[str], Optional[str]]:
         """
-        Get API credentials for this account, trying numeric scheme first, then legacy.
+        Get API credentials for this account.
         
         Returns:
             Tuple of (api_key, secret_key) or (None, None) if not found
         """
         if self.env_pairs:
-            return get_first_non_empty_pair(self.env_pairs)
+            for api_key_env, secret_key_env in self.env_pairs:
+                api_key = os.getenv(api_key_env)
+                secret_key = os.getenv(secret_key_env)
+                if api_key and secret_key:
+                    return api_key, secret_key
+            return None, None
         if self.api_key_env and self.secret_key_env:
             api_key = os.getenv(self.api_key_env)
             secret_key = os.getenv(self.secret_key_env)
@@ -76,27 +63,21 @@ _accounts: Dict[str, AccountConfig] = {
         ],
         source_key_env=None,  # Optional, not in .env by default
     ),
-    "bingx_vst_demo": AccountConfig(
-        account_id="bingx_vst_demo",
+    "bingx_1": AccountConfig(
+        account_id="bingx_1",
         exchange="bingx",
         mode="demo",  # Demo mode: uses VST host with virtual USDT
-        # Try numeric scheme first (BINGX_1_*), then fall back to legacy (BINGX_VST_*)
-        env_pairs=[
-            ("BINGX_1_API_KEY", "BINGX_1_API_SECRET"),
-            ("BINGX_VST_API_KEY", "BINGX_VST_API_SECRET"),
-        ],
+        api_key_env="BINGX_1_API_KEY",
+        secret_key_env="BINGX_1_API_SECRET",
         source_key_env=None,  # Optional, not in .env by default
         supports_reduce_only=False,
     ),
-    "bingx_vst_demo_secondary": AccountConfig(
-        account_id="bingx_vst_demo_secondary",
+    "bingx_2": AccountConfig(
+        account_id="bingx_2",
         exchange="bingx",
         mode="demo",  # Demo mode: uses VST host with virtual USDT
-        # Try numeric scheme first (BINGX_2_*), then fall back to legacy (BINGX_SECOND_*)
-        env_pairs=[
-            ("BINGX_2_API_KEY", "BINGX_2_API_SECRET"),
-            ("BINGX_SECOND_API_KEY", "BINGX_SECOND_SECRET_KEY"),
-        ],
+        api_key_env="BINGX_2_API_KEY",
+        secret_key_env="BINGX_2_API_SECRET",
         source_key_env=None,  # Optional, not in .env by default
         supports_reduce_only=False,
     )
@@ -128,10 +109,10 @@ def _get_available_accounts(account_ids: List[str]) -> List[str]:
 
 # Routing profile definitions (before availability filtering)
 _routing_profile_definitions: Dict[str, List[str]] = {
-    "demo_primary_only": ["bingx_vst_demo"],
-    "demo_secondary_only": ["bingx_vst_demo_secondary"],
-    "demo_both": ["bingx_vst_demo", "bingx_vst_demo_secondary"],
-    "default": ["bingx_vst_demo"],  # default behaves like demo_primary_only
+    "demo_1": ["bingx_1"],
+    "demo_2": ["bingx_2"],
+    "demo_1_2": ["bingx_1", "bingx_2"],
+    "default": ["bingx_1"],  # default behaves like demo_1
 }
 
 
@@ -171,11 +152,11 @@ def get_routing_profile(name: str) -> List[AccountConfig]:
     """
     Get list of account configs for a routing profile.
     
-    Resolves 'default' to 'demo_primary_only' behavior.
+    Resolves 'default' to 'demo_1' behavior.
     Filters accounts by availability (credentials present).
     
     Args:
-        name: Routing profile name (e.g., "demo_primary_only", "demo_both", "default")
+        name: Routing profile name (e.g., "demo_1", "demo_2", "demo_1_2", "default")
         
     Returns:
         List of AccountConfig instances (only accounts with available credentials)
@@ -183,9 +164,9 @@ def get_routing_profile(name: str) -> List[AccountConfig]:
     Raises:
         ValueError: If profile name is not found
     """
-    # Resolve 'default' to 'demo_primary_only' behavior
+    # Resolve 'default' to 'demo_1' behavior
     if name == "default":
-        name = "demo_primary_only"
+        name = "demo_1"
     
     # Rebuild profile dynamically to account for current environment
     if name not in _routing_profile_definitions:

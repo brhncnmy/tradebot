@@ -13,7 +13,7 @@ client = TestClient(app)
 def test_map_command_to_action_enter_long():
     """Verify ENTER_LONG commands map to open-position actions."""
     request = OpenOrderRequest(
-        account=AccountRef(exchange="bingx", account_id="bingx_vst_demo"),
+        account=AccountRef(exchange="bingx", account_id="bingx_1"),
         symbol="HBARUSDT",
         side="long",
         entry_type="market",
@@ -34,7 +34,7 @@ def test_map_command_to_action_enter_long():
 def test_map_command_to_action_exit_short():
     """Verify EXIT_SHORT commands map to close-position actions."""
     request = OpenOrderRequest(
-        account=AccountRef(exchange="bingx", account_id="bingx_vst_demo"),
+        account=AccountRef(exchange="bingx", account_id="bingx_1"),
         symbol="NTRNUSDT",
         side="short",
         entry_type="market",
@@ -53,7 +53,7 @@ def test_map_command_to_action_exit_short():
 def test_map_command_to_action_exit_long():
     """Verify EXIT_LONG commands map to close-position actions."""
     request = OpenOrderRequest(
-        account=AccountRef(exchange="bingx", account_id="bingx_vst_demo"),
+        account=AccountRef(exchange="bingx", account_id="bingx_1"),
         symbol="BTCUSDT",
         side="long",
         entry_type="market",
@@ -72,7 +72,7 @@ def test_map_command_to_action_exit_long():
 def test_cancel_all_returns_ack_response():
     """Ensure CANCEL_ALL commands are accepted but not executed yet."""
     payload = {
-        "account": {"exchange": "bingx", "account_id": "bingx_vst_demo"},
+        "account": {"exchange": "bingx", "account_id": "bingx_1"},
         "symbol": "HBARUSDT",
         "entry_type": "market",
         "command": "CANCEL_ALL",
