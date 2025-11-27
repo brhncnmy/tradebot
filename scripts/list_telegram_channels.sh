@@ -24,8 +24,11 @@ mkdir -p "${SESSION_DIR}"
 echo "[list-channels] Listing Telegram dialogs/channels for account: ${ACCOUNT_ID}"
 echo "[list-channels] Session file: ${SESSION_DIR}/session_${ACCOUNT_ID}.session"
 
-# Use latest image tag if TRADEBOT_TAG is set, otherwise use dev
-export TRADEBOT_TAG="${TRADEBOT_TAG:-dev}"
+# Use TRADEBOT_TAG if explicitly set, otherwise default to latest fix tag
+# This allows override: TRADEBOT_TAG=xxx ./scripts/list_telegram_channels.sh ta01
+if [[ -z "${TRADEBOT_TAG:-}" ]]; then
+  export TRADEBOT_TAG="vv20251127-telegram-source-v2-fix"
+fi
 
 # Pull the correct image tag
 echo "[list-channels] Pulling telegram-source image with tag: ${TRADEBOT_TAG}"
