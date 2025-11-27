@@ -24,14 +24,15 @@ mkdir -p "${SESSION_DIR}"
 echo "[list-channels] Listing Telegram dialogs/channels for account: ${ACCOUNT_ID}"
 echo "[list-channels] Session file: ${SESSION_DIR}/session_${ACCOUNT_ID}.session"
 
-# Use TRADEBOT_TAG if explicitly set, otherwise default to latest fix tag
+# Use TRADEBOT_TAG if explicitly set via command line, otherwise default to latest fix tag
 # This allows override: TRADEBOT_TAG=xxx ./scripts/list_telegram_channels.sh ta01
-if [[ -z "${TRADEBOT_TAG:-}" ]]; then
-  TRADEBOT_TAG="vv20251127-telegram-source-v2-fix"
+# Note: We unset first to override any value from .env file
+if [[ -z "${TRADEBOT_TAG:-}" ]] || [[ "${TRADEBOT_TAG}" == "vv20251126-2146-85b1b92" ]]; then
+  unset TRADEBOT_TAG
+  export TRADEBOT_TAG="vv20251127-telegram-source-v2-fix"
+else
+  export TRADEBOT_TAG
 fi
-
-# Export TRADEBOT_TAG so docker compose uses it (overrides .env file)
-export TRADEBOT_TAG
 
 # Pull the correct image tag
 echo "[list-channels] Pulling telegram-source image with tag: ${TRADEBOT_TAG}"
