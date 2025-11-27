@@ -20,11 +20,21 @@ class PocketOptionParser(BaseParser):
     """Parser for PocketOption signal messages."""
     
     # Compiled regex patterns for performance
-    PREPARE_PATTERN = re.compile(r"^Prepare a currency\s+(?P<asset>.+)$", re.IGNORECASE)
-    ENTRY_PATTERN = re.compile(r"^(?P<asset>.+?)\s+(?P<duration>\d+)\s*min\s+(?P<direction>LOWER|HIGHER)\b.*$", re.IGNORECASE)
+    # Handle markdown formatting (**, __, etc.) by stripping them
+    PREPARE_PATTERN = re.compile(r"^.*?Prepare a currency\s+(?P<asset>.+?)(?:\s*\*+)?$", re.IGNORECASE)
+    ENTRY_PATTERN = re.compile(r"^.*?(?P<asset>.+?)\s+(?P<duration>\d+)\s*min\s+(?P<direction>LOWER|HIGHER)\b.*$", re.IGNORECASE)
     REPEAT_X2_PATTERN = re.compile(r"Repeat.*Amount\s*x\s*2", re.IGNORECASE | re.DOTALL)
-    PROFIT_PATTERN = re.compile(r"^profit\s*👍", re.IGNORECASE)
-    LOSS_PATTERN = re.compile(r"^loss\s*👎", re.IGNORECASE)
+    PROFIT_PATTERN = re.compile(r"^.*?profit\s*👍", re.IGNORECASE)
+    LOSS_PATTERN = re.compile(r"^.*?loss\s*👎", re.IGNORECASE)
+    
+    @staticmethod
+    def _strip_markdown(text: str) -> str:
+        """Remove markdown formatting from text."""
+        # Remove **, __, *, _ from start and end
+        text = re.sub(r'^\*+|^_+|\*+$|_+$', '', text)
+        # Remove inline markdown
+        text = re.sub(r'\*\*|__', '', text)
+        return text.strip()
     
     def parse(self, message: Message) -> Optional[PocketOptionSignal]:
         """
@@ -58,7 +68,7 @@ class PocketOptionParser(BaseParser):
         # Try PREPARE pattern
         prepare_match = self.PREPARE_PATTERN.match(text)
         if prepare_match:
-            asset = prepare_match.group("asset").strip()
+            asset = self._strip_markdown(prepare_match.group("asset"))
             logger.info(
                 "Parsed PREPARE signal",
                 extra={"message_id": message.id, "asset": asset}
@@ -77,7 +87,7 @@ class PocketOptionParser(BaseParser):
         # Try ENTRY pattern
         entry_match = self.ENTRY_PATTERN.match(text)
         if entry_match:
-            asset = entry_match.group("asset").strip()
+            asset = self._strip_markdown(entry_match.group("asset"))
             duration_str = entry_match.group("duration")
             direction_str = entry_match.group("direction").upper()
             
