@@ -33,7 +33,7 @@ class PocketOptionBotClient:
         if not self.config.pocketoption_bot_url:
             logger.info(
                 "POCKETOPTION_BOT_URL not configured, skipping HTTP call",
-                extra={"signal_asset": signal.asset}
+                extra={"signal_type": signal.signal_type.value}
             )
             return
         
@@ -41,22 +41,23 @@ class PocketOptionBotClient:
             logger.info(
                 "DRY-RUN mode: would send signal to PocketOption bot",
                 extra={
+                    "signal_type": signal.signal_type.value,
                     "signal_asset": signal.asset,
-                    "signal_direction": signal.direction.value,
-                    "signal_duration_seconds": signal.duration_seconds,
-                    "signal_stake": signal.stake,
+                    "signal_duration_minutes": signal.duration_minutes,
+                    "signal_direction": signal.direction.value if signal.direction else None,
+                    "signal_amount_multiplier": signal.amount_multiplier,
                     "bot_url": self.config.pocketoption_bot_url,
                 }
             )
             return
         
-        # Prepare JSON payload
+        # Prepare JSON payload matching new schema
         payload = {
+            "signal_type": signal.signal_type.value,
             "asset": signal.asset,
-            "direction": signal.direction.value,
-            "duration_seconds": signal.duration_seconds,
-            "stake": signal.stake,
-            "strategy": signal.strategy,
+            "duration_minutes": signal.duration_minutes,
+            "direction": signal.direction.value if signal.direction else None,
+            "amount_multiplier": signal.amount_multiplier,
             "raw_message_id": signal.raw_message_id,
             "raw_channel_id": signal.raw_channel_id,
             "raw_text": signal.raw_text,
@@ -71,7 +72,7 @@ class PocketOptionBotClient:
                 logger.info(
                     "Successfully sent signal to PocketOption bot",
                     extra={
-                        "signal_asset": signal.asset,
+                        "signal_type": signal.signal_type.value,
                         "status_code": response.status_code,
                     }
                 )
@@ -79,7 +80,7 @@ class PocketOptionBotClient:
             logger.error(
                 "Failed to send signal to PocketOption bot",
                 extra={
-                    "signal_asset": signal.asset,
+                    "signal_type": signal.signal_type.value,
                     "error": str(e),
                     "error_type": type(e).__name__,
                 },
@@ -89,11 +90,9 @@ class PocketOptionBotClient:
             logger.error(
                 "Unexpected error while sending signal to PocketOption bot",
                 extra={
-                    "signal_asset": signal.asset,
+                    "signal_type": signal.signal_type.value,
                     "error": str(e),
                     "error_type": type(e).__name__,
                 },
                 exc_info=True,
             )
-
-

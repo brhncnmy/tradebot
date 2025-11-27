@@ -106,11 +106,11 @@ class TelegramSourceService:
                 logger.info(
                     "Parsed PocketOption signal",
                     extra={
+                        "signal_type": signal.signal_type.value,
                         "asset": signal.asset,
-                        "direction": signal.direction.value,
-                        "duration_seconds": signal.duration_seconds,
-                        "stake": signal.stake,
-                        "strategy": signal.strategy,
+                        "duration_minutes": signal.duration_minutes,
+                        "direction": signal.direction.value if signal.direction else None,
+                        "amount_multiplier": signal.amount_multiplier,
                         "message_id": message.id,
                     }
                 )
