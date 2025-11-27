@@ -26,7 +26,7 @@ mkdir -p "${SESSION_DIR}"
 # Note: We unset first to override any value from .env file
 if [[ -z "${TRADEBOT_TAG:-}" ]] || [[ "${TRADEBOT_TAG}" == "vv20251126-2146-85b1b92" ]]; then
   unset TRADEBOT_TAG
-  export TRADEBOT_TAG="vv20251127-telegram-source-v4"
+  export TRADEBOT_TAG="vv20251127-telegram-source-v4-fix2"
 else
   export TRADEBOT_TAG
 fi
