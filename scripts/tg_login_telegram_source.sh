@@ -27,6 +27,10 @@ echo "[tg-login] Session will be saved to: ${SESSION_DIR}/session_${ACCOUNT_ID}.
 # Use latest image tag if TRADEBOT_TAG is set, otherwise use dev
 export TRADEBOT_TAG="${TRADEBOT_TAG:-dev}"
 
+# Pull the correct image tag
+echo "[tg-login] Pulling telegram-source image with tag: ${TRADEBOT_TAG}"
+docker compose pull telegram-source
+
 docker compose run --rm -it \
   -e TELEGRAM_API_ID="${TELEGRAM_API_ID}" \
   -e TELEGRAM_API_HASH="${TELEGRAM_API_HASH}" \
