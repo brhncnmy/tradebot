@@ -25,6 +25,7 @@ echo "[release_pocketoption_phase2] Using TRADEBOT_TAG=${TRADEBOT_TAG}"
 
 # 1) Run tests
 echo "[release_pocketoption_phase2] Running tests..."
+export PYTHONPATH="${ROOT_DIR}"
 pytest telegram/telegram-source/tests -q
 
 # 2) Build and push telegram-source image using buildx
