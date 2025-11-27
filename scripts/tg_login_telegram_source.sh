@@ -24,6 +24,9 @@ mkdir -p "${SESSION_DIR}"
 echo "[tg-login] Starting interactive Telegram login for account: ${ACCOUNT_ID}"
 echo "[tg-login] Session will be saved to: ${SESSION_DIR}/session_${ACCOUNT_ID}.session"
 
+# Use latest image tag if TRADEBOT_TAG is set, otherwise use dev
+export TRADEBOT_TAG="${TRADEBOT_TAG:-dev}"
+
 docker compose run --rm -it \
   -e TELEGRAM_API_ID="${TELEGRAM_API_ID}" \
   -e TELEGRAM_API_HASH="${TELEGRAM_API_HASH}" \
