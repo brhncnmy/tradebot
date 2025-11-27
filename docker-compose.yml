@@ -59,6 +59,26 @@ services:
     networks:
       - tradebot-net
 
+  telegram-source:
+    build:
+      context: .
+      dockerfile: docker/telegram-source.Dockerfile
+    image: "${TB_DOCKER_NAMESPACE:-tradebot-local}/telegram-source:${TRADEBOT_TAG:-dev}"
+    container_name: telegram-source
+    environment:
+      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
+      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - TELEGRAM_ACCOUNT_ID=${TELEGRAM_ACCOUNT_ID:-ta01}
+      - TELEGRAM_POCKETOPTION_CHANNEL_ID=${TELEGRAM_POCKETOPTION_CHANNEL_ID}
+      - TELEGRAM_SESSION_DIR=/app/telegram/sessions
+      - POCKETOPTION_BOT_URL=${POCKETOPTION_BOT_URL:-}
+      - POCKETOPTION_DRY_RUN=${POCKETOPTION_DRY_RUN:-true}
+    volumes:
+      - "${HOME}/tradebot-data/telegram/sessions:/app/telegram/sessions"
+    restart: always
+    networks:
+      - tradebot-net
+
 networks:
   tradebot-net:
     driver: bridge
