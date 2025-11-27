@@ -52,11 +52,16 @@ class PocketOptionBotClient:
             return
         
         # Prepare JSON payload matching new schema
+        # Direction should be sent as string (will be normalized on bot side)
+        direction_str = None
+        if signal.direction:
+            direction_str = signal.direction.value
+        
         payload = {
             "signal_type": signal.signal_type.value,
             "asset": signal.asset,
             "duration_minutes": signal.duration_minutes,
-            "direction": signal.direction.value if signal.direction else None,
+            "direction": direction_str,
             "amount_multiplier": signal.amount_multiplier,
             "raw_message_id": signal.raw_message_id,
             "raw_channel_id": signal.raw_channel_id,
