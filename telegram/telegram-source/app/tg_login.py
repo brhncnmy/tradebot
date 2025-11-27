@@ -1,35 +1,61 @@
 """Interactive Telegram login helper for creating session files."""
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
 from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError
 
-from app.config import TelegramSourceConfig
 from app.logging_config import get_logger
 
 logger = get_logger("tg-login")
 
 
+def load_config_for_login():
+    """Load minimal config for login (channel_id not required)."""
+    api_id = os.getenv("TELEGRAM_API_ID")
+    if not api_id:
+        raise ValueError("TELEGRAM_API_ID environment variable is required")
+    
+    api_hash = os.getenv("TELEGRAM_API_HASH")
+    if not api_hash:
+        raise ValueError("TELEGRAM_API_HASH environment variable is required")
+    
+    account_id = os.getenv("TELEGRAM_ACCOUNT_ID")
+    if not account_id:
+        raise ValueError("TELEGRAM_ACCOUNT_ID environment variable is required")
+    
+    session_dir = Path(os.getenv("TELEGRAM_SESSION_DIR", "/app/telegram/sessions"))
+    session_file = session_dir / f"session_{account_id}.session"
+    
+    return {
+        "api_id": int(api_id),
+        "api_hash": api_hash,
+        "session_file": session_file,
+        "account_id": account_id,
+    }
+
+
 async def login() -> None:
     """Interactive login flow to create/refresh Telegram session."""
     try:
-        config = TelegramSourceConfig.from_env()
+        config = load_config_for_login()
     except ValueError as e:
         print(f"Configuration error: {e}", file=sys.stderr)
+        logger.error("Configuration error", extra={"error": str(e)})
         sys.exit(1)
     
     # Ensure session directory exists
-    config.session_dir.mkdir(parents=True, exist_ok=True)
+    config["session_file"].parent.mkdir(parents=True, exist_ok=True)
     
-    session_file = config.session_file
+    session_file = config["session_file"]
     print(f"Session file: {session_file}")
-    print(f"Account ID: {config.account_id}")
+    print(f"Account ID: {config['account_id']}")
     
     # Create Telegram client
-    client = TelegramClient(str(session_file), config.api_id, config.api_hash)
+    client = TelegramClient(str(session_file), config["api_id"], config["api_hash"])
     
     try:
         await client.connect()
