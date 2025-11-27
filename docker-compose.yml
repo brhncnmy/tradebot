@@ -71,10 +71,30 @@ services:
       - TELEGRAM_ACCOUNT_ID=${TELEGRAM_ACCOUNT_ID:-ta01}
       - TELEGRAM_POCKETOPTION_CHANNEL_ID=${TELEGRAM_POCKETOPTION_CHANNEL_ID}
       - TELEGRAM_SESSION_DIR=/app/telegram/sessions
-      - POCKETOPTION_BOT_URL=${POCKETOPTION_BOT_URL:-}
+      - POCKETOPTION_BOT_URL=${POCKETOPTION_BOT_URL:-http://pocketoption-bot:8080/place_trade}
       - POCKETOPTION_DRY_RUN=${POCKETOPTION_DRY_RUN:-true}
     volumes:
       - "${HOME}/tradebot-data/telegram/sessions:/app/telegram/sessions"
+    depends_on:
+      - pocketoption-bot
+    restart: always
+    networks:
+      - tradebot-net
+
+  pocketoption-bot:
+    build:
+      context: .
+      dockerfile: docker/pocketoption-bot.Dockerfile
+    image: "${TB_DOCKER_NAMESPACE:-tradebot-local}/pocketoption-bot:${TRADEBOT_TAG:-dev}"
+    container_name: pocketoption-bot
+    ports:
+      - "8080:8080"
+    environment:
+      - POCKETOPTION_ENABLED=${POCKETOPTION_ENABLED:-true}
+      - POCKETOPTION_DRY_RUN=${POCKETOPTION_DRY_RUN:-true}
+      - POCKETOPTION_BASE_STAKE=${POCKETOPTION_BASE_STAKE:-1.0}
+      - POCKETOPTION_MAX_STAKE_PER_TRADE=${POCKETOPTION_MAX_STAKE_PER_TRADE:-}
+      - POCKETOPTION_ACCOUNT_TYPE=${POCKETOPTION_ACCOUNT_TYPE:-DEMO}
     restart: always
     networks:
       - tradebot-net
