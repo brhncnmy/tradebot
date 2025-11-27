@@ -30,10 +30,11 @@ class PocketOptionParser(BaseParser):
     @staticmethod
     def _strip_markdown(text: str) -> str:
         """Remove markdown formatting from text."""
-        # Remove **, __, *, _ from start and end
-        text = re.sub(r'^\*+|^_+|\*+$|_+$', '', text)
-        # Remove inline markdown
-        text = re.sub(r'\*\*|__', '', text)
+        # Remove **, __, *, _ from anywhere
+        text = re.sub(r'\*\*+', '', text)
+        text = re.sub(r'__+', '', text)
+        text = re.sub(r'\*+', '', text)
+        text = re.sub(r'_+', '', text)
         return text.strip()
     
     def parse(self, message: Message) -> Optional[PocketOptionSignal]:
@@ -60,13 +61,16 @@ class PocketOptionParser(BaseParser):
         text = message.text.strip()
         logger.debug("Parsing message", extra={"message_id": message.id, "text_preview": text[:100]})
         
+        # Normalize text by stripping markdown for pattern matching
+        normalized_text = self._strip_markdown(text)
+        
         # Check for profit/loss messages first (ignore these)
-        if self.PROFIT_PATTERN.match(text) or self.LOSS_PATTERN.match(text):
+        if self.PROFIT_PATTERN.match(normalized_text) or self.LOSS_PATTERN.match(normalized_text):
             logger.debug("Ignoring profit/loss message", extra={"message_id": message.id})
             return None
         
-        # Try PREPARE pattern
-        prepare_match = self.PREPARE_PATTERN.match(text)
+        # Try PREPARE pattern (use normalized text for matching)
+        prepare_match = self.PREPARE_PATTERN.match(normalized_text)
         if prepare_match:
             asset = self._strip_markdown(prepare_match.group("asset"))
             logger.info(
@@ -84,8 +88,8 @@ class PocketOptionParser(BaseParser):
                 raw_text=text,
             )
         
-        # Try ENTRY pattern
-        entry_match = self.ENTRY_PATTERN.match(text)
+        # Try ENTRY pattern (use normalized text for matching)
+        entry_match = self.ENTRY_PATTERN.match(normalized_text)
         if entry_match:
             asset = self._strip_markdown(entry_match.group("asset"))
             duration_str = entry_match.group("duration")
@@ -129,7 +133,7 @@ class PocketOptionParser(BaseParser):
                 raw_text=text,
             )
         
-        # Try REPEAT_X2 pattern
+        # Try REPEAT_X2 pattern (use original text, markdown doesn't affect this pattern)
         if self.REPEAT_X2_PATTERN.search(text):
             logger.info("Parsed REPEAT_X2 signal", extra={"message_id": message.id})
             return PocketOptionSignal(
