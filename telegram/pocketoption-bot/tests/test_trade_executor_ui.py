@@ -134,10 +134,12 @@ def test_entry_dry_run_false_ui_enabled_true_no_playwright():
             raw_text="GBP/USD OTC 5 min LOWER",
         )
         
-        # Mock import failure
-        with patch("app.service.trade_executor.PocketOptionUIDriver", side_effect=ImportError("No module named 'playwright'")):
+        # Mock import failure by patching the import inside the function
+        with patch("app.ui_driver.playwright_driver.SYNC_PLAYWRIGHT", None):
+            # This will cause RuntimeError when trying to create driver
             result = executor.execute(signal)
             
-            # Should handle gracefully
-            assert result.status in ("error", "accepted")  # May vary based on exact error handling
+            # Should handle gracefully and return error
+            assert result.status == "error"
+            assert "initialization failed" in result.reason.lower() or "not available" in result.reason.lower()
 
