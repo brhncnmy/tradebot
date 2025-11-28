@@ -74,12 +74,23 @@ class PocketOptionUIDriver:
                 self.context = self.browser.new_context()
                 self.page = self.context.new_page()
                 
-                # Navigate to login page
+                # Navigate to login page with tolerant wait strategy
                 logger.info("Navigating to login page", extra={"url": self.settings.login_url})
-                self.page.goto(self.settings.login_url)
+                self.page.goto(
+                    self.settings.login_url,
+                    wait_until="domcontentloaded",
+                    timeout=60000,
+                )
                 
-                # Wait for page to load
-                self.page.wait_for_load_state("networkidle")
+                # Give the page a brief moment to settle (SPAs / analytics can keep network busy)
+                logger.info("Waiting for page to settle")
+                self.page.wait_for_timeout(1000)
+                
+                # Optional: try to wait for networkidle with short timeout, but don't fail if it times out
+                try:
+                    self.page.wait_for_load_state("networkidle", timeout=5000)
+                except Exception:
+                    logger.info("networkidle not reached, continuing anyway")
                 
                 # Fill username
                 logger.info("Filling username field", extra={"selector": self.settings.selector_username})
@@ -103,7 +114,7 @@ class PocketOptionUIDriver:
                 
                 # Simple success check: URL should change from login page
                 if "login" not in current_url.lower():
-                    logger.info("PocketOption UI login successful")
+                    logger.info("PocketOption UI login flow executed successfully")
                 else:
                     logger.warning("Login may have failed - still on login page", extra={"url": current_url})
                 
