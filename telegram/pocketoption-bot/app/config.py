@@ -25,6 +25,14 @@ class PocketOptionBotConfig(BaseModel):
     selector_username: Optional[str] = Field(default=None, description="CSS selector for username input")
     selector_password: Optional[str] = Field(default=None, description="CSS selector for password input")
     selector_login_button: Optional[str] = Field(default=None, description="CSS selector for login button")
+    
+    # Trading UI selectors
+    selector_asset_field: Optional[str] = Field(default=None, description="CSS selector for asset input/select field")
+    selector_duration_field: Optional[str] = Field(default=None, description="CSS selector for duration input/select field")
+    selector_direction_up: Optional[str] = Field(default=None, description="CSS selector for UP/HIGHER direction button")
+    selector_direction_down: Optional[str] = Field(default=None, description="CSS selector for DOWN/LOWER direction button")
+    selector_stake_field: Optional[str] = Field(default=None, description="CSS selector for stake/amount input field")
+    selector_place_trade_button: Optional[str] = Field(default=None, description="CSS selector for place trade button")
 
     @classmethod
     def from_env(cls) -> "PocketOptionBotConfig":
@@ -47,6 +55,14 @@ class PocketOptionBotConfig(BaseModel):
         selector_username = os.getenv("POCKETOPTION_SELECTOR_USERNAME")
         selector_password = os.getenv("POCKETOPTION_SELECTOR_PASSWORD")
         selector_login_button = os.getenv("POCKETOPTION_SELECTOR_LOGIN_BUTTON")
+        
+        # Trading UI selectors
+        selector_asset_field = os.getenv("POCKETOPTION_SELECTOR_ASSET_FIELD")
+        selector_duration_field = os.getenv("POCKETOPTION_SELECTOR_DURATION_FIELD")
+        selector_direction_up = os.getenv("POCKETOPTION_SELECTOR_DIRECTION_UP")
+        selector_direction_down = os.getenv("POCKETOPTION_SELECTOR_DIRECTION_DOWN")
+        selector_stake_field = os.getenv("POCKETOPTION_SELECTOR_STAKE_FIELD")
+        selector_place_trade_button = os.getenv("POCKETOPTION_SELECTOR_PLACE_TRADE_BUTTON")
 
         return cls(
             enabled=enabled,
@@ -62,6 +78,12 @@ class PocketOptionBotConfig(BaseModel):
             selector_username=selector_username,
             selector_password=selector_password,
             selector_login_button=selector_login_button,
+            selector_asset_field=selector_asset_field,
+            selector_duration_field=selector_duration_field,
+            selector_direction_up=selector_direction_up,
+            selector_direction_down=selector_direction_down,
+            selector_stake_field=selector_stake_field,
+            selector_place_trade_button=selector_place_trade_button,
         )
 
 

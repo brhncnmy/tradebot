@@ -95,29 +95,105 @@ class TradeExecutor:
                 )
                 return TradeResult(
                     status="accepted",
-                    reason="DRY-RUN (no UI yet)",
+                    reason="DRY-RUN (no UI calls)",
                     dry_run=True,
                     enabled=True,
                 )
             else:
-                # Future: UI automation would be invoked here
-                logger.info(
-                    "ENTRY signal received (no UI implementation yet)",
-                    extra={
-                        "asset": signal.asset,
-                        "duration_minutes": signal.duration_minutes,
-                        "direction": direction_str,
-                        "stake": stake,
-                        "account_type": self.config.account_type,
-                        "message_id": signal.raw_message_id,
-                    }
-                )
-                return TradeResult(
-                    status="accepted",
-                    reason="no UI implementation yet",
-                    dry_run=False,
-                    enabled=True,
-                )
+                # Non-DRY-RUN: Check if UI is enabled
+                if not self.config.ui_enabled:
+                    logger.warning(
+                        "ENTRY signal received but POCKETOPTION_UI_ENABLED is false",
+                        extra={
+                            "asset": signal.asset,
+                            "duration_minutes": signal.duration_minutes,
+                            "direction": direction_str,
+                            "stake": stake,
+                            "message_id": signal.raw_message_id,
+                        }
+                    )
+                    return TradeResult(
+                        status="error",
+                        reason="UI disabled while DRY_RUN=false",
+                        dry_run=False,
+                        enabled=True,
+                    )
+                
+                # UI is enabled: attempt to use UI driver
+                try:
+                    from app.ui_driver.playwright_driver import PocketOptionUIDriver
+                    
+                    # Initialize UI driver
+                    try:
+                        driver = PocketOptionUIDriver(self.config)
+                    except RuntimeError as e:
+                        logger.error(
+                            "UI driver initialization failed",
+                            extra={"error": str(e), "message_id": signal.raw_message_id},
+                            exc_info=True,
+                        )
+                        return TradeResult(
+                            status="error",
+                            reason="UI driver initialization failed",
+                            dry_run=False,
+                            enabled=True,
+                        )
+                    
+                    # Execute trade via UI
+                    try:
+                        driver.place_entry_trade(
+                            asset=signal.asset or "",
+                            duration_minutes=signal.duration_minutes or 0,
+                            direction=direction,
+                            stake=stake,
+                        )
+                        logger.info(
+                            "ENTRY trade executed via UI",
+                            extra={
+                                "asset": signal.asset,
+                                "duration_minutes": signal.duration_minutes,
+                                "direction": direction_str,
+                                "stake": stake,
+                                "message_id": signal.raw_message_id,
+                            }
+                        )
+                        return TradeResult(
+                            status="accepted",
+                            reason="ENTRY executed via UI",
+                            dry_run=False,
+                            enabled=True,
+                        )
+                    except Exception as e:
+                        logger.error(
+                            "UI trade execution failed",
+                            extra={
+                                "error": str(e),
+                                "asset": signal.asset,
+                                "duration_minutes": signal.duration_minutes,
+                                "direction": direction_str,
+                                "stake": stake,
+                                "message_id": signal.raw_message_id,
+                            },
+                            exc_info=True,
+                        )
+                        return TradeResult(
+                            status="error",
+                            reason="UI trade execution failed",
+                            dry_run=False,
+                            enabled=True,
+                        )
+                except ImportError as e:
+                    logger.error(
+                        "Failed to import UI driver",
+                        extra={"error": str(e), "message_id": signal.raw_message_id},
+                        exc_info=True,
+                    )
+                    return TradeResult(
+                        status="error",
+                        reason="UI driver not available",
+                        dry_run=False,
+                        enabled=True,
+                    )
         
         # Handle REPEAT_X2 signals
         if signal.signal_type == PocketOptionSignalType.REPEAT_X2:
