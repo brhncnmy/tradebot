@@ -91,25 +91,39 @@ class PocketOptionParser(BaseParser):
         # Try ENTRY pattern (use normalized text for matching)
         entry_match = self.ENTRY_PATTERN.match(normalized_text)
         if entry_match:
-            asset = self._strip_markdown(entry_match.group("asset"))
-            duration_str = entry_match.group("duration")
-            direction_str = entry_match.group("direction").upper()
-            
             try:
-                duration_minutes = int(duration_str)
-            except ValueError:
+                asset = self._strip_markdown(entry_match.group("asset"))
+                if not asset or not asset.strip():
+                    logger.warning(
+                        "Failed to parse asset from message",
+                        extra={"message_id": message.id, "text_preview": text[:100]}
+                    )
+                    return None
+                
+                duration_str = entry_match.group("duration")
+                direction_str = entry_match.group("direction").upper()
+                
+                try:
+                    duration_minutes = int(duration_str)
+                except ValueError:
+                    logger.warning(
+                        "Failed to parse duration",
+                        extra={"message_id": message.id, "duration": duration_str}
+                    )
+                    return None
+                
+                # Map LOWER/HIGHER to direction enum
+                direction = PocketOptionDirection.from_lower_higher(direction_str)
+                if direction is None:
+                    logger.warning(
+                        "Invalid direction value",
+                        extra={"message_id": message.id, "direction": direction_str}
+                    )
+                    return None
+            except (IndexError, AttributeError) as e:
                 logger.warning(
-                    "Failed to parse duration",
-                    extra={"message_id": message.id, "duration": duration_str}
-                )
-                return None
-            
-            # Map LOWER/HIGHER to direction enum
-            direction = PocketOptionDirection.from_lower_higher(direction_str)
-            if direction is None:
-                logger.warning(
-                    "Invalid direction value",
-                    extra={"message_id": message.id, "direction": direction_str}
+                    "Failed to parse asset from message",
+                    extra={"message_id": message.id, "text_preview": text[:100], "error": str(e)}
                 )
                 return None
             
