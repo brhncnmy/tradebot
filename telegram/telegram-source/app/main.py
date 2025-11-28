@@ -84,11 +84,15 @@ class TelegramSourceService:
             async def handle_new_message(event: events.NewMessage.Event) -> None:
                 """Handle new messages from the PocketOption channel."""
                 message = event.message
+                # Get raw message text
+                raw_text = message.text or "(no text)"
+                
                 logger.info(
                     "Received new message",
                     extra={
                         "message_id": message.id,
                         "channel_id": message.chat_id,
+                        "raw_text": raw_text[:200],  # First 200 chars for debugging
                     }
                 )
                 
@@ -112,6 +116,7 @@ class TelegramSourceService:
                         "direction": signal.direction.value if signal.direction else None,
                         "amount_multiplier": signal.amount_multiplier,
                         "message_id": message.id,
+                        "raw_text": signal.raw_text[:200],  # First 200 chars for debugging
                     }
                 )
                 
