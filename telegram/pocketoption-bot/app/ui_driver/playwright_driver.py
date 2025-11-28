@@ -191,14 +191,13 @@ class PocketOptionUIDriver:
             }
         )
         
-        # Validate required selectors
+        # Validate required selectors (BUY/SELL buttons act as both direction and place-trade)
         required_selectors = {
             "POCKETOPTION_SELECTOR_ASSET_FIELD": self.settings.selector_asset_field,
             "POCKETOPTION_SELECTOR_DURATION_FIELD": self.settings.selector_duration_field,
+            "POCKETOPTION_SELECTOR_STAKE_FIELD": self.settings.selector_stake_field,
             "POCKETOPTION_SELECTOR_DIRECTION_UP": self.settings.selector_direction_up,
             "POCKETOPTION_SELECTOR_DIRECTION_DOWN": self.settings.selector_direction_down,
-            "POCKETOPTION_SELECTOR_STAKE_FIELD": self.settings.selector_stake_field,
-            "POCKETOPTION_SELECTOR_PLACE_TRADE_BUTTON": self.settings.selector_place_trade_button,
         }
         
         missing = [key for key, value in required_selectors.items() if not value]
@@ -226,39 +225,69 @@ class PocketOptionUIDriver:
                 # This can be refined later with a dedicated trading URL
                 trading_url = self.settings.login_url.replace("/login/", "/") if "/login/" in self.settings.login_url else "https://pocketoption.com/en/"
                 logger.info("Navigating to trading page", extra={"url": trading_url})
-                page.goto(trading_url)
-                page.wait_for_load_state("networkidle")
+                page.goto(
+                    trading_url,
+                    wait_until="domcontentloaded",
+                    timeout=60000,
+                )
+                page.wait_for_timeout(1000)  # Give page time to settle
                 
-                # Asset selection
+                # Asset selection: click asset field to open panel, then search and select
                 logger.info("Selecting asset", extra={"asset": asset, "selector": self.settings.selector_asset_field})
-                page.fill(self.settings.selector_asset_field, asset)
-                page.wait_for_timeout(500)  # Wait for asset to be selected
+                page.click(self.settings.selector_asset_field)
+                page.wait_for_timeout(500)  # Wait for asset panel to open
                 
-                # Duration
-                logger.info("Setting duration", extra={"duration_minutes": duration_minutes, "selector": self.settings.selector_duration_field})
-                page.fill(self.settings.selector_duration_field, str(duration_minutes))
+                # Search for asset using placeholder or generic search
+                try:
+                    search_locator = page.get_by_placeholder("Search")
+                    search_locator.click()
+                    search_locator.fill(asset)
+                    page.wait_for_timeout(300)
+                except Exception:
+                    # Fallback: try to find search input by other means
+                    logger.warning("Could not find search placeholder, attempting alternative search")
+                
+                # Select the asset from the list by text
+                page.get_by_text(asset).first.click()
                 page.wait_for_timeout(500)
                 
-                # Direction
+                # Duration: click duration field and select preset (e.g., M5 for 5 minutes)
+                logger.info("Setting duration", extra={"duration_minutes": duration_minutes, "selector": self.settings.selector_duration_field})
+                page.click(self.settings.selector_duration_field)
+                page.wait_for_timeout(200)
+                
+                # Map duration to preset labels (TODO: make this configurable)
+                if duration_minutes == 5:
+                    page.get_by_text("M5").click()
+                elif duration_minutes == 1:
+                    page.get_by_text("M1").click()
+                elif duration_minutes == 15:
+                    page.get_by_text("M15").click()
+                elif duration_minutes == 30:
+                    page.get_by_text("M30").click()
+                else:
+                    logger.warning(
+                        "Unsupported duration, attempting to proceed without changing",
+                        extra={"duration_minutes": duration_minutes}
+                    )
+                page.wait_for_timeout(200)
+                
+                # Stake: click amount field and fill
+                logger.info("Setting stake", extra={"stake": stake, "selector": self.settings.selector_stake_field})
+                stake_locator = page.locator(self.settings.selector_stake_field)
+                stake_locator.click()
+                stake_locator.fill(str(stake))
+                page.wait_for_timeout(500)
+                
+                # Direction & place-trade: BUY/SELL buttons act as both direction and place-trade
                 if direction in (PocketOptionDirection.UP, PocketOptionDirection.CALL, PocketOptionDirection.HIGHER):
-                    logger.info("Selecting UP direction", extra={"selector": self.settings.selector_direction_up})
+                    logger.info("Clicking UP (BUY) button (direction + place trade)", extra={"selector": self.settings.selector_direction_up})
                     page.click(self.settings.selector_direction_up)
                 elif direction in (PocketOptionDirection.DOWN, PocketOptionDirection.PUT, PocketOptionDirection.LOWER):
-                    logger.info("Selecting DOWN direction", extra={"selector": self.settings.selector_direction_down})
+                    logger.info("Clicking DOWN (SELL) button (direction + place trade)", extra={"selector": self.settings.selector_direction_down})
                     page.click(self.settings.selector_direction_down)
                 else:
                     raise RuntimeError(f"Unsupported direction: {direction}")
-                
-                page.wait_for_timeout(500)
-                
-                # Stake
-                logger.info("Setting stake", extra={"stake": stake, "selector": self.settings.selector_stake_field})
-                page.fill(self.settings.selector_stake_field, str(stake))
-                page.wait_for_timeout(500)
-                
-                # Place trade
-                logger.info("Clicking place trade button", extra={"selector": self.settings.selector_place_trade_button})
-                page.click(self.settings.selector_place_trade_button)
                 
                 # Wait for trade confirmation
                 page.wait_for_timeout(1000)
