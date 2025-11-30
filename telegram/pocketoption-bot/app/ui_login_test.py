@@ -37,15 +37,21 @@ def main() -> int:
         # Attempt login
         try:
             driver.login()
-            success_msg = "PocketOption UI login successful."
-            print(success_msg)
-            logger.info(success_msg)
-            return 0
+        except RuntimeError as e:
+            error_msg = f"PocketOption UI login failed: {e}"
+            print(error_msg, file=sys.stderr)
+            logger.error(error_msg)
+            return 1
         except Exception as e:
             error_msg = f"PocketOption UI login failed: {e}"
             print(error_msg, file=sys.stderr)
             logger.error(error_msg, exc_info=True)
             return 1
+        
+        success_msg = "PocketOption UI login successful."
+        print(success_msg)
+        logger.info(success_msg)
+        return 0
             
     except Exception as e:
         error_msg = f"Unexpected error during UI login test: {e}"

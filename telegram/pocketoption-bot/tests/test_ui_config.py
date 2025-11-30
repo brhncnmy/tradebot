@@ -75,3 +75,20 @@ def test_ui_config_existing_fields_unchanged():
         assert settings.max_stake_per_trade is None
         assert settings.account_type == "DEMO"
 
+
+def test_login_manual_wait_and_trading_root_defaults():
+    """Test that login manual wait and trading root selector have correct defaults."""
+    # Clear any existing settings instance
+    import app.config
+    app.config._settings = None
+    
+    with patch.dict(os.environ, {}, clear=False):
+        settings = PocketOptionBotConfig.from_env()
+        
+        # Check defaults
+        assert settings.login_manual_wait_seconds > 0
+        assert isinstance(settings.login_manual_wait_seconds, int)
+        assert settings.login_manual_wait_seconds == 45  # default value
+        assert settings.selector_trading_root
+        assert settings.selector_trading_root == "#bar-chart"  # default value
+

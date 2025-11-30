@@ -1,7 +1,7 @@
 """Playwright-based UI driver for PocketOption automation."""
 
 import sys
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 # Guarded import: Playwright is optional
 try:
@@ -9,6 +9,12 @@ try:
     SYNC_PLAYWRIGHT = sync_playwright
 except ImportError:
     SYNC_PLAYWRIGHT = None
+    # For type checking when Playwright is not installed
+    if TYPE_CHECKING:
+        from playwright.sync_api import Page
+    else:
+        # Create a dummy type for runtime when Playwright is not available
+        Page = None  # type: ignore
 
 from app.config import PocketOptionBotConfig
 from app.logging_config import get_logger
@@ -38,6 +44,27 @@ class PocketOptionUIDriver:
         self.browser: Optional[Browser] = None
         self.context: Optional[BrowserContext] = None
         self.page: Optional[Page] = None
+    
+    def _is_trading_page(self, page: "Page") -> bool:
+        """
+        Heuristic to detect whether we are on the main trading page.
+        
+        We consider the user 'logged in' if either:
+        - the URL contains '/cabinet', or
+        - the configured trading root selector is visible.
+        """
+        try:
+            if "/cabinet" in page.url:
+                return True
+        except Exception:
+            # If URL access fails, fall through and rely on selector
+            pass
+        
+        try:
+            root = page.locator(self.settings.selector_trading_root)
+            return root.first.is_visible(timeout=2000)
+        except Exception:
+            return False
     
     def login(self) -> None:
         """
@@ -104,40 +131,56 @@ class PocketOptionUIDriver:
                 logger.info("Clicking login button", extra={"selector": self.settings.selector_login_button})
                 self.page.click(self.settings.selector_login_button)
                 
-                # Wait for post-login condition (simple timeout + URL check)
+                # Wait for initial response
                 logger.info("Waiting for login to complete")
-                self.page.wait_for_timeout(2000)  # Wait 2 seconds for redirect/navigation
+                self.page.wait_for_timeout(2000)
                 
-                # Check if URL changed (simple success indicator)
-                current_url = self.page.url
-                logger.info("Login completed", extra={"current_url": current_url})
+                # First, quick success check
+                if self._is_trading_page(self.page):
+                    logger.info("Login detected as successful (trading page visible)")
+                    return
                 
-                # Simple success check: URL should change from login page
-                if "login" not in current_url.lower():
-                    logger.info("PocketOption UI login flow executed successfully")
-                else:
-                    logger.warning("Login may have failed - still on login page", extra={"url": current_url})
+                # Not yet on trading page: likely captcha/manual step required
+                max_wait = self.settings.login_manual_wait_seconds
+                logger.warning(
+                    "Login may have failed or requires manual intervention - still on login page. "
+                    "Waiting up to %s seconds for manual captcha/login...",
+                    max_wait,
+                )
                 
+                waited = 0
+                step = 5
+                
+                while waited < max_wait:
+                    self.page.wait_for_timeout(step * 1000)
+                    waited += step
+                    
+                    if self._is_trading_page(self.page):
+                        logger.info(
+                            "Detected trading page after manual intervention (waited %s seconds)",
+                            waited,
+                        )
+                        return
+                
+                logger.error(
+                    "Login failed - still on login page after %s seconds manual wait",
+                    max_wait,
+                )
+                raise RuntimeError(
+                    f"PocketOption UI login failed: still on login page after {max_wait} seconds"
+                )
+                
+        except RuntimeError:
+            # Re-raise RuntimeError from login failure
+            raise
         except Exception as e:
             logger.error("PocketOption UI login failed", extra={"error": str(e)}, exc_info=True)
-            raise
+            raise RuntimeError(f"PocketOption UI login failed: {e}") from e
         finally:
-            # Cleanup
-            if self.page:
-                try:
-                    self.page.close()
-                except Exception:
-                    pass
-            if self.context:
-                try:
-                    self.context.close()
-                except Exception:
-                    pass
-            if self.browser:
-                try:
-                    self.browser.close()
-                except Exception:
-                    pass
+            # Cleanup (only if login failed - on success, browser/page stay open for further use)
+            # Note: For test scripts, we may want to keep browser open even after success
+            # This cleanup is mainly for error cases
+            pass
     
     def prepare_asset(self, asset: str) -> None:
         """

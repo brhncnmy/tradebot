@@ -25,6 +25,10 @@ class PocketOptionBotConfig(BaseModel):
     selector_username: Optional[str] = Field(default=None, description="CSS selector for username input")
     selector_password: Optional[str] = Field(default=None, description="CSS selector for password input")
     selector_login_button: Optional[str] = Field(default=None, description="CSS selector for login button")
+    selector_trading_root: str = Field(default="#bar-chart", description="CSS selector that exists on the main trading page when the user is logged in")
+    
+    # Login flow settings
+    login_manual_wait_seconds: int = Field(default=45, description="Max seconds to wait for manual captcha/login after clicking the login button")
     
     # Trading UI selectors
     selector_asset_field: Optional[str] = Field(default=None, description="CSS selector for asset input/select field")
@@ -55,6 +59,10 @@ class PocketOptionBotConfig(BaseModel):
         selector_username = os.getenv("POCKETOPTION_SELECTOR_USERNAME")
         selector_password = os.getenv("POCKETOPTION_SELECTOR_PASSWORD")
         selector_login_button = os.getenv("POCKETOPTION_SELECTOR_LOGIN_BUTTON")
+        selector_trading_root = os.getenv("POCKETOPTION_SELECTOR_TRADING_ROOT", "#bar-chart")
+        
+        # Login flow settings
+        login_manual_wait_seconds = int(os.getenv("POCKETOPTION_LOGIN_MANUAL_WAIT_SECONDS", "45"))
         
         # Trading UI selectors
         selector_asset_field = os.getenv("POCKETOPTION_SELECTOR_ASSET_FIELD")
@@ -78,6 +86,8 @@ class PocketOptionBotConfig(BaseModel):
             selector_username=selector_username,
             selector_password=selector_password,
             selector_login_button=selector_login_button,
+            selector_trading_root=selector_trading_root,
+            login_manual_wait_seconds=login_manual_wait_seconds,
             selector_asset_field=selector_asset_field,
             selector_duration_field=selector_duration_field,
             selector_direction_up=selector_direction_up,

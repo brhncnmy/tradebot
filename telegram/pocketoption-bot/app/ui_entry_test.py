@@ -39,12 +39,18 @@ def main() -> int:
         logger.info("Starting login flow")
         try:
             driver.login()
-            logger.info("Login successful")
+        except RuntimeError as e:
+            error_msg = f"PocketOption UI login failed: {e}"
+            print(error_msg, file=sys.stderr)
+            logger.error(error_msg)
+            return 1
         except Exception as e:
             error_msg = f"PocketOption UI login failed: {e}"
             print(error_msg, file=sys.stderr)
             logger.error(error_msg, exc_info=True)
             return 1
+        
+        logger.info("Login successful")
 
         # 2) Place a single ENTRY trade
         asset = "GBP/USD OTC"
