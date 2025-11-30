@@ -284,10 +284,8 @@ class PocketOptionUIDriver:
                 
                 page = context.new_page()
                 
-                # Navigate to trading page (assume authenticated session or navigate to main page)
-                # For now, use login URL as base and assume redirect after login
-                # This can be refined later with a dedicated trading URL
-                trading_url = self.settings.login_url.replace("/login/", "/") if "/login/" in self.settings.login_url else "https://pocketoption.com/en/"
+                # Navigate to trading page using configured trading URL
+                trading_url = self.settings.trading_url
                 logger.info("Navigating to trading page", extra={"url": trading_url})
                 page.goto(
                     trading_url,

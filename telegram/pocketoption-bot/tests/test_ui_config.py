@@ -92,3 +92,27 @@ def test_login_manual_wait_and_trading_root_defaults():
         assert settings.selector_trading_root
         assert settings.selector_trading_root == "#bar-chart"  # default value
 
+
+def test_trading_url_defaults_demo_mode():
+    """Test that trading URL defaults to demo mode."""
+    # Clear any existing settings instance
+    import app.config
+    app.config._settings = None
+    
+    with patch.dict(os.environ, {}, clear=False):
+        settings = PocketOptionBotConfig.from_env()
+        
+        # Check trading URL defaults
+        assert (
+            settings.trading_url_demo
+            == "https://pocketoption.com/en/cabinet/demo-quick-high-low/"
+        )
+        assert (
+            settings.trading_url_live
+            == "https://pocketoption.com/en/cabinet/quick-high-low/USD/"
+        )
+        assert settings.use_demo is True
+        
+        # In default mode, trading_url should point to the demo trading URL
+        assert settings.trading_url == settings.trading_url_demo
+

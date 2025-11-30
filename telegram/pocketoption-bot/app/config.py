@@ -30,6 +30,11 @@ class PocketOptionBotConfig(BaseModel):
     # Login flow settings
     login_manual_wait_seconds: int = Field(default=45, description="Max seconds to wait for manual captcha/login after clicking the login button")
     
+    # Trading URLs
+    trading_url_demo: str = Field(default="https://pocketoption.com/en/cabinet/demo-quick-high-low/", description="Demo trading page URL")
+    trading_url_live: str = Field(default="https://pocketoption.com/en/cabinet/quick-high-low/USD/", description="Live trading page URL")
+    use_demo: bool = Field(default=True, description="Use demo trading (True) or live trading (False)")
+    
     # Trading UI selectors
     selector_asset_field: Optional[str] = Field(default=None, description="CSS selector for asset input/select field")
     selector_duration_field: Optional[str] = Field(default=None, description="CSS selector for duration input/select field")
@@ -64,6 +69,11 @@ class PocketOptionBotConfig(BaseModel):
         # Login flow settings
         login_manual_wait_seconds = int(os.getenv("POCKETOPTION_LOGIN_MANUAL_WAIT_SECONDS", "45"))
         
+        # Trading URLs
+        trading_url_demo = os.getenv("POCKETOPTION_TRADING_URL_DEMO", "https://pocketoption.com/en/cabinet/demo-quick-high-low/")
+        trading_url_live = os.getenv("POCKETOPTION_TRADING_URL_LIVE", "https://pocketoption.com/en/cabinet/quick-high-low/USD/")
+        use_demo = os.getenv("POCKETOPTION_USE_DEMO", "true").lower() in ("true", "1", "yes")
+        
         # Trading UI selectors
         selector_asset_field = os.getenv("POCKETOPTION_SELECTOR_ASSET_FIELD")
         selector_duration_field = os.getenv("POCKETOPTION_SELECTOR_DURATION_FIELD")
@@ -88,6 +98,9 @@ class PocketOptionBotConfig(BaseModel):
             selector_login_button=selector_login_button,
             selector_trading_root=selector_trading_root,
             login_manual_wait_seconds=login_manual_wait_seconds,
+            trading_url_demo=trading_url_demo,
+            trading_url_live=trading_url_live,
+            use_demo=use_demo,
             selector_asset_field=selector_asset_field,
             selector_duration_field=selector_duration_field,
             selector_direction_up=selector_direction_up,
@@ -107,4 +120,20 @@ def get_settings() -> PocketOptionBotConfig:
     if _settings is None:
         _settings = PocketOptionBotConfig.from_env()
     return _settings
+
+
+# Add trading_url property to PocketOptionBotConfig via monkey-patching or subclass
+# Since we're using BaseModel, we'll add it as a property method
+def _trading_url_property(self: PocketOptionBotConfig) -> str:
+    """
+    Returns the effective trading URL.
+    
+    For now we default to demo trading, but can be switched to live later
+    via POCKETOPTION_USE_DEMO=false.
+    """
+    return self.trading_url_demo if self.use_demo else self.trading_url_live
+
+
+# Attach the property to the class
+PocketOptionBotConfig.trading_url = property(_trading_url_property)
 
