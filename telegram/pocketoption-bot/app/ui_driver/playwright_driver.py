@@ -44,6 +44,7 @@ class PocketOptionUIDriver:
         self.browser: Optional[Browser] = None
         self.context: Optional[BrowserContext] = None
         self.page: Optional[Page] = None
+        self._auth_storage_state: Optional[dict] = None
     
     def _is_trading_page(self, page: "Page") -> bool:
         """
@@ -138,6 +139,12 @@ class PocketOptionUIDriver:
                 # First, quick success check
                 if self._is_trading_page(self.page):
                     logger.info("Login detected as successful (trading page visible)")
+                    # Capture auth storage state for later reuse
+                    try:
+                        self._auth_storage_state = self.context.storage_state()
+                        logger.info("Captured auth storage state for reuse")
+                    except Exception as e:
+                        logger.warning("Failed to capture storage state: %s", e)
                     return
                 
                 # Not yet on trading page: likely captcha/manual step required
@@ -160,6 +167,12 @@ class PocketOptionUIDriver:
                             "Detected trading page after manual intervention (waited %s seconds)",
                             waited,
                         )
+                        # Capture auth storage state for later reuse
+                        try:
+                            self._auth_storage_state = self.context.storage_state()
+                            logger.info("Captured auth storage state for reuse")
+                        except Exception as e:
+                            logger.warning("Failed to capture storage state: %s", e)
                         return
                 
                 logger.error(
@@ -259,8 +272,16 @@ class PocketOptionUIDriver:
                 logger.info("Launching browser for trade execution", extra={"headless": self.settings.headless})
                 browser = playwright.chromium.launch(headless=self.settings.headless)
                 
-                # Create context
-                context = browser.new_context()
+                # Create context with stored auth state if available
+                if self._auth_storage_state is not None:
+                    logger.info("Using stored auth storage state for trading context")
+                    context = browser.new_context(storage_state=self._auth_storage_state)
+                else:
+                    logger.warning(
+                        "No auth storage state available; opening fresh context (may not be logged in)"
+                    )
+                    context = browser.new_context()
+                
                 page = context.new_page()
                 
                 # Navigate to trading page (assume authenticated session or navigate to main page)
@@ -277,6 +298,7 @@ class PocketOptionUIDriver:
                 
                 # Asset selection: click asset field to open panel, then search and select
                 logger.info("Selecting asset", extra={"asset": asset, "selector": self.settings.selector_asset_field})
+                page.wait_for_selector(self.settings.selector_asset_field, timeout=60000)
                 page.click(self.settings.selector_asset_field)
                 page.wait_for_timeout(500)  # Wait for asset panel to open
                 
@@ -296,18 +318,23 @@ class PocketOptionUIDriver:
                 
                 # Duration: click duration field and select preset (e.g., M5 for 5 minutes)
                 logger.info("Setting duration", extra={"duration_minutes": duration_minutes, "selector": self.settings.selector_duration_field})
+                page.wait_for_selector(self.settings.selector_duration_field, timeout=60000)
                 page.click(self.settings.selector_duration_field)
                 page.wait_for_timeout(200)
                 
                 # Map duration to preset labels (TODO: make this configurable)
                 if duration_minutes == 5:
-                    page.get_by_text("M5").click()
+                    page.get_by_text("M5").first.wait_for(timeout=10000)
+                    page.get_by_text("M5").first.click()
                 elif duration_minutes == 1:
-                    page.get_by_text("M1").click()
+                    page.get_by_text("M1").first.wait_for(timeout=10000)
+                    page.get_by_text("M1").first.click()
                 elif duration_minutes == 15:
-                    page.get_by_text("M15").click()
+                    page.get_by_text("M15").first.wait_for(timeout=10000)
+                    page.get_by_text("M15").first.click()
                 elif duration_minutes == 30:
-                    page.get_by_text("M30").click()
+                    page.get_by_text("M30").first.wait_for(timeout=10000)
+                    page.get_by_text("M30").first.click()
                 else:
                     logger.warning(
                         "Unsupported duration, attempting to proceed without changing",
@@ -317,6 +344,7 @@ class PocketOptionUIDriver:
                 
                 # Stake: click amount field and fill
                 logger.info("Setting stake", extra={"stake": stake, "selector": self.settings.selector_stake_field})
+                page.wait_for_selector(self.settings.selector_stake_field, timeout=60000)
                 stake_locator = page.locator(self.settings.selector_stake_field)
                 stake_locator.click()
                 stake_locator.fill(str(stake))
@@ -325,9 +353,11 @@ class PocketOptionUIDriver:
                 # Direction & place-trade: BUY/SELL buttons act as both direction and place-trade
                 if direction in (PocketOptionDirection.UP, PocketOptionDirection.CALL, PocketOptionDirection.HIGHER):
                     logger.info("Clicking UP (BUY) button (direction + place trade)", extra={"selector": self.settings.selector_direction_up})
+                    page.wait_for_selector(self.settings.selector_direction_up, timeout=60000)
                     page.click(self.settings.selector_direction_up)
                 elif direction in (PocketOptionDirection.DOWN, PocketOptionDirection.PUT, PocketOptionDirection.LOWER):
                     logger.info("Clicking DOWN (SELL) button (direction + place trade)", extra={"selector": self.settings.selector_direction_down})
+                    page.wait_for_selector(self.settings.selector_direction_down, timeout=60000)
                     page.click(self.settings.selector_direction_down)
                 else:
                     raise RuntimeError(f"Unsupported direction: {direction}")
